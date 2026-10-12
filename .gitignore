@@ -8,3 +8,7 @@ books/covers/*
 !books/covers/.htaccess
 
 .DS_Store
+
+# Python
+__pycache__/
+*.pyc
