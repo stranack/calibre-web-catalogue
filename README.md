@@ -100,6 +100,10 @@ Anyone with the address can browse the catalogue. By default the pages ask searc
 
 The `app/` and `data/` folders are blocked from the web by `.htaccess`, including the settings file and the Dropbox token. For extra separation, set `data_dir` in `config.php` to a folder outside your web space and reconnect Dropbox.
 
+## Opening books in Dropbox
+
+Each book page can link to the book's files and folder on the Dropbox website. Only someone signed in to the Dropbox account that holds the library can open them, so the links don't share the books. By default they appear only on browsers where you've signed in to `admin.php` (the browser is remembered for a year). Set `dropbox_links` in `config.php` to `everyone` to show them to all visitors, or `off` to hide them.
+
 ## Other sources
 
 Set `local_library_path` in `config.php` to read a Calibre library folder on the server itself instead of Dropbox, for example one you upload by SFTP.

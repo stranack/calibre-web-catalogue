@@ -327,7 +327,10 @@ final class Catalog
         foreach ($all('SELECT type, val FROM identifiers WHERE book = :id') as $row) {
             $b['identifiers'][strtolower($row['type'])] = $row['val'];
         }
-        $b['formats'] = array_column($all('SELECT format FROM data WHERE book = :id ORDER BY format'), 'format');
+        $b['files'] = $all('SELECT format, name FROM data WHERE book = :id ORDER BY format');
+        $b['formats'] = array_column($b['files'], 'format');
+        $p = $one('SELECT path FROM books WHERE id = :id');
+        $b['path'] = (string) ($p['path'] ?? '');
         return $b;
     }
 

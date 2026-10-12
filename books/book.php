@@ -82,7 +82,13 @@ page_top($b['title']);
             <span class="ext"><?php foreach ($idf['links'] as $j => [$label, $href]): ?><?= $j ? ', ' : '' ?><a href="<?= h($href) ?>" rel="noopener noreferrer" target="_blank"><?= h($label) ?></a><?php endforeach; ?></span>
           </dd></div>
           <?php endforeach; ?>
-          <?php $formats = array_filter($b['formats'], fn($x) => stripos($x, 'ORIGINAL_') !== 0); if ($formats): ?><div><dt>Formats</dt><dd><?= h(implode(', ', $formats)) ?></dd></div><?php endif; ?>
+          <?php $files = array_values(array_filter($b['files'], fn($x) => stripos((string) $x['format'], 'ORIGINAL_') !== 0)); ?>
+          <?php if ($files && show_dropbox_links() && $b['path'] !== ''): ?>
+          <div><dt>Files</dt><dd class="dropbox-links">
+            <?php foreach ($files as $j => $fl): $fname = $fl['name'] . '.' . strtolower((string) $fl['format']); ?><?= $j ? ' ' : '' ?><a class="file-link" href="<?= h(dropbox_web_url($b['path'], $fname)) ?>" target="_blank" rel="noopener noreferrer" title="Open <?= h($fname) ?> in Dropbox"><?= h($fl['format']) ?></a><?php endforeach; ?>
+            <a class="ext" href="<?= h(dropbox_web_url($b['path'])) ?>" target="_blank" rel="noopener noreferrer">Open the book's folder in Dropbox</a>
+          </dd></div>
+          <?php elseif ($files): ?><div><dt>Formats</dt><dd><?= h(implode(', ', array_column($files, 'format'))) ?></dd></div><?php endif; ?>
           <?php if ($added): ?><div><dt>Added</dt><dd><?= h($added) ?></dd></div><?php endif; ?>
         </dl>
       </section>

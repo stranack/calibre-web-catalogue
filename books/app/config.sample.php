@@ -24,6 +24,13 @@ return [
     // ~/Dropbox/Books/Calibre Library on your computer, use '/Books/Calibre Library'.
     'dropbox_library_path' => '/Calibre Library',
 
+    // Links on each book page that open its files in your Dropbox (only
+    // someone signed in to that Dropbox account can open them).
+    //   'owner'    shown only on browsers where you've signed in to admin.php
+    //   'everyone' shown to every visitor
+    //   'off'      not shown
+    'dropbox_links' => 'owner',
+
     // Secret used by cron.php?key=... if you trigger syncs from a web cron
     // service instead of a cPanel cron job. Leave empty to switch cron.php off.
     'cron_key' => '',

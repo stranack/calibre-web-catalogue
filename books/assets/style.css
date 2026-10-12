@@ -305,6 +305,14 @@ main { max-width: var(--wrap); margin: 0 auto; padding: 0 var(--gutter) 64px; }
 .record dd { margin: 0; overflow-wrap: anywhere; }
 .record .ext { display: block; font-size: 0.88rem; }
 
+.dropbox-links { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; }
+.file-link {
+  display: inline-block; padding: 2px 10px; border: 1px solid var(--rule); border-radius: 999px;
+  font-size: 0.85rem; font-weight: 600; text-decoration: none;
+}
+.file-link:hover { background: var(--accent-wash); border-color: var(--accent); }
+.dropbox-links .ext { flex-basis: 100%; }
+
 /* ---- Browse lists --------------------------------------------------- */
 
 .letters {

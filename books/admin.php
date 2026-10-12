@@ -31,6 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($passwordUsable && hash_equals($password, (string) ($_POST['password'] ?? ''))) {
             session_regenerate_id(true);
             $_SESSION['admin'] = true;
+            set_owner_cookie(true);
             header('Location: admin.php');
             exit;
         }
@@ -42,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             switch ($action) {
                 case 'logout':
+                    set_owner_cookie(false);
                     $_SESSION = [];
                     session_destroy();
                     header('Location: admin.php');
@@ -129,6 +131,8 @@ page_top('Admin', ['search' => false, 'noindex' => true, 'class' => 'admin']);
         <div><dt>Last checked</dt><dd><?= !empty($state['last_check']) ? h(date('M j, Y g:i a', strtotime($state['last_check']))) : 'Never' ?></dd></div>
         <div><dt>Catalogue changed</dt><dd><?= !empty($state['last_change']) ? h(date('M j, Y g:i a', strtotime($state['last_change']))) : 'Never' ?></dd></div>
         <?php if (!empty($state['last_error'])): ?><div><dt>Last error</dt><dd class="err"><?= h($state['last_error']) ?></dd></div><?php endif; ?>
+        <?php $dl = (string) cfg('dropbox_links', 'owner'); ?>
+        <div><dt>Dropbox links</dt><dd><?= $dl === 'off' ? 'Off' : ($dl === 'everyone' ? 'Shown to every visitor' : (is_owner() ? 'Shown on this browser (you are signed in)' : 'Shown only to you, once you sign in on this browser')) ?></dd></div>
         <div><dt>PHP</dt><dd><?= h(PHP_VERSION) ?><?= $sqliteVersion ? ' with SQLite ' . h($sqliteVersion) : '' ?><?= $missing ? ', missing: ' . h(implode(', ', $missing)) : ', all needed extensions present' ?></dd></div>
       </dl>
     </div>

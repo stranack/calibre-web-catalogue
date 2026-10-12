@@ -21,6 +21,57 @@ function link_to(string $page, array $params = []): string
     return $page . ($params ? '?' . http_build_query($params) : '');
 }
 
+/**
+ * The site owner is recognised by a long-lived cookie set when signing in to
+ * admin.php. It is derived from the admin password, so changing the password
+ * signs out every browser.
+ */
+function owner_token(): string
+{
+    $p = (string) cfg('admin_password', '');
+    return strlen($p) < 8 ? '' : hash_hmac('sha256', 'library-owner-v1', $p);
+}
+
+function is_owner(): bool
+{
+    $t = owner_token();
+    return $t !== '' && hash_equals($t, (string) ($_COOKIE['library_owner'] ?? ''));
+}
+
+function set_owner_cookie(bool $on): void
+{
+    $dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/') . '/';
+    setcookie('library_owner', $on ? owner_token() : '', [
+        'expires'  => $on ? time() + 365 * 86400 : time() - 3600,
+        'path'     => $dir,
+        'secure'   => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+}
+
+/** Whether book pages should show "open in Dropbox" links to this visitor. */
+function show_dropbox_links(): bool
+{
+    if (!empty(cfg('local_library_path'))) {
+        return false;
+    }
+    $mode = (string) cfg('dropbox_links', 'owner');
+    return $mode === 'everyone' || ($mode === 'owner' && is_owner());
+}
+
+/**
+ * Address of a folder (or a file within it) on the Dropbox website.
+ * $relPath is relative to the Calibre library, e.g. "Will Ferguson/Road Trip Rwanda (1414)".
+ */
+function dropbox_web_url(string $relPath, ?string $file = null): string
+{
+    $full = trim((string) cfg('dropbox_library_path', ''), '/') . '/' . trim($relPath, '/');
+    $parts = array_map('rawurlencode', array_filter(explode('/', $full), fn($x) => $x !== ''));
+    $url = 'https://www.dropbox.com/home/' . implode('/', $parts);
+    return $file === null ? $url : $url . '?preview=' . rawurlencode($file);
+}
+
 function cover_url(array $b): ?string
 {
     if (empty($b['has_cover'])) {

@@ -14,6 +14,7 @@ $GLOBALS['CONFIG'] = [
     'dropbox_app_secret'   => '',
     'dropbox_library_path' => '/Calibre Library',
     'cron_key'             => '',
+    'dropbox_links'        => 'owner',
     'cron_time_budget'     => 300,
     'allow_search_engines' => false,
     'per_page'             => 48,
