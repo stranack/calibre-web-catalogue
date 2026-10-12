@@ -25,6 +25,7 @@ The server's own SQLite version doesn't matter. Calibre's `metadata.db` uses tab
 ## Layout
 
 ```
+tools/               optional library maintenance scripts (not uploaded)
 books/               upload this folder to your web space
   index.php          home page, search and filtered lists
   book.php           book detail page
@@ -121,6 +122,10 @@ Set `local_library_path` in `config.php` to read a Calibre library folder on the
 **Some books show a plain cloth-style cover.** Calibre has no cover for that book, or Dropbox couldn't make a thumbnail. **Full refresh** retries them.
 
 **"The downloaded metadata.db could not be read."** Dropbox was probably mid-upload while Calibre was saving. The next run will try again.
+
+## Library maintenance tools
+
+The `tools/` folder has a few optional Python scripts for tidying a Calibre library from outside Calibre: adding subject tags in bulk, clearing out stray tags, checking that the catalogue matches the files on disk, and recovering books left out of the catalogue after a library move. They aren't needed to run the site. See [tools/README.md](tools/README.md).
 
 ## Changing the look
 
