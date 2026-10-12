@@ -1,0 +1,10 @@
+# Your settings: holds the admin password and Dropbox app secret
+books/app/config.php
+
+# Created by the sync on the server
+books/data/*
+!books/data/.htaccess
+books/covers/*
+!books/covers/.htaccess
+
+.DS_Store

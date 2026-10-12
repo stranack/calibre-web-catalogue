@@ -1,0 +1,110 @@
+<?php
+declare(strict_types=1);
+require __DIR__ . '/app/bootstrap.php';
+
+$cat = Catalog::open();
+if (!$cat) {
+    not_ready_page();
+    exit;
+}
+
+$id = (int) ($_GET['id'] ?? 0);
+$b = $id ? $cat->book($id) : null;
+if (!$b) {
+    http_response_code(404);
+    page_top('Book not found');
+    echo '<section class="empty"><h1>That book isn\'t in the library</h1><p>It may have been removed from Calibre. <a href="index.php">Back to all books</a></p></section>';
+    page_bottom();
+    exit;
+}
+
+$year = pub_year($b['pubdate']);
+$published = nice_date($b['pubdate']);
+$added = nice_date($b['timestamp']);
+$description = clean_description($b['description']);
+$ids = identifier_links($b['identifiers']);
+$langs = array_filter(array_map('language_name', $b['languages']));
+
+$more = [];
+$moreAuthor = $b['authors'][0] ?? null;
+if ($moreAuthor) {
+    $more = $cat->moreByAuthor($moreAuthor['id'], $b['id'], 12);
+}
+$inSeries = [];
+if ($b['series']) {
+    $r = $cat->search(['series' => (int) $b['series']['id']], 'series', 1, 40);
+    $inSeries = array_values(array_filter($r['books'], fn($x) => (int) $x['id'] !== (int) $b['id']));
+}
+
+page_top($b['title']);
+?>
+  <article class="book">
+    <div class="book-cover"><?= cover_html($b, true) ?></div>
+
+    <div class="book-main">
+      <h1 class="book-title"><?= h($b['title']) ?></h1>
+      <p class="book-authors">
+        <?php foreach ($b['authors'] as $i => $a): ?><?= $i ? ($i === count($b['authors']) - 1 ? ' and ' : ', ') : '' ?><a href="<?= h(link_to('index.php', ['author' => $a['id']])) ?>"><?= h($a['name']) ?></a><?php endforeach; ?>
+      </p>
+      <?php if ($b['series']): ?>
+      <p class="book-series">Book <?= h(series_number($b['series_index'])) ?> in <a href="<?= h(link_to('index.php', ['series' => (int) $b['series']['id']])) ?>"><?= h($b['series']['name']) ?></a></p>
+      <?php endif; ?>
+      <?php if ($b['rating'] > 0): $stars = (int) round($b['rating'] / 2); ?>
+      <p class="book-rating" aria-label="Rated <?= $stars ?> out of 5"><span aria-hidden="true"><?= str_repeat('★', $stars) . str_repeat('☆', 5 - $stars) ?></span></p>
+      <?php endif; ?>
+
+      <?php if ($description !== ''): ?>
+      <div class="book-desc" data-clamp><?= $description ?></div>
+      <?php else: ?>
+      <p class="book-nodesc">No description in the catalogue for this book.</p>
+      <?php endif; ?>
+
+      <?php if ($b['tags']): ?>
+      <ul class="chips book-tags" aria-label="Subjects">
+        <?php foreach ($b['tags'] as $t): ?>
+        <li><a class="chip" href="<?= h(link_to('index.php', ['tag' => (int) $t['id']])) ?>"><?= h($t['name']) ?></a></li>
+        <?php endforeach; ?>
+      </ul>
+      <?php endif; ?>
+
+      <section class="record" aria-labelledby="rec-h">
+        <h2 id="rec-h">Catalogue record</h2>
+        <dl>
+          <div><dt>Title</dt><dd><?= h($b['title']) ?></dd></div>
+          <div><dt><?= count($b['authors']) > 1 ? 'Authors' : 'Author' ?></dt><dd><?= h(author_names($b, 10)) ?></dd></div>
+          <?php if ($b['series']): ?><div><dt>Series</dt><dd><?= h($b['series']['name']) ?>, book <?= h(series_number($b['series_index'])) ?></dd></div><?php endif; ?>
+          <?php if ($b['publisher']): ?><div><dt>Publisher</dt><dd><a href="<?= h(link_to('index.php', ['publisher' => (int) $b['publisher']['id']])) ?>"><?= h($b['publisher']['name']) ?></a></dd></div><?php endif; ?>
+          <?php if ($published): ?><div><dt>Published</dt><dd><?= h($published) ?></dd></div><?php endif; ?>
+          <?php if ($langs): ?><div><dt>Language</dt><dd><?= h(implode(', ', $langs)) ?></dd></div><?php endif; ?>
+          <?php foreach ($ids as $idf): ?>
+          <div><dt><?= h($idf['label']) ?></dt><dd><?= h($idf['value']) ?>
+            <span class="ext"><?php foreach ($idf['links'] as $j => [$label, $href]): ?><?= $j ? ', ' : '' ?><a href="<?= h($href) ?>" rel="noopener noreferrer" target="_blank"><?= h($label) ?></a><?php endforeach; ?></span>
+          </dd></div>
+          <?php endforeach; ?>
+          <?php $formats = array_filter($b['formats'], fn($x) => stripos($x, 'ORIGINAL_') !== 0); if ($formats): ?><div><dt>Formats</dt><dd><?= h(implode(', ', $formats)) ?></dd></div><?php endif; ?>
+          <?php if ($added): ?><div><dt>Added</dt><dd><?= h($added) ?></dd></div><?php endif; ?>
+        </dl>
+      </section>
+    </div>
+  </article>
+
+  <?php if ($inSeries): ?>
+  <section class="shelf" aria-labelledby="series-h">
+    <div class="section-head">
+      <h2 id="series-h">Also in <?= h($b['series']['name']) ?></h2>
+    </div>
+    <div class="shelf-track"><ul class="shelf-row"><?php foreach ($inSeries as $x) echo book_card($x); ?></ul></div>
+  </section>
+  <?php endif; ?>
+
+  <?php if ($more): ?>
+  <section class="shelf" aria-labelledby="more-h">
+    <div class="section-head">
+      <h2 id="more-h">More by <?= h($moreAuthor['name']) ?></h2>
+      <?php if (count($more) >= 12): ?><a href="<?= h(link_to('index.php', ['author' => $moreAuthor['id']])) ?>">See all</a><?php endif; ?>
+    </div>
+    <div class="shelf-track"><ul class="shelf-row"><?php foreach ($more as $x) echo book_card($x); ?></ul></div>
+  </section>
+  <?php endif; ?>
+<?php
+page_bottom();
