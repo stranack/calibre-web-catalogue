@@ -18,6 +18,27 @@ final class Catalog
         ]);
     }
 
+    /**
+     * Older PHP versions (before 8.1) hand back every SQLite value as text.
+     * Give numeric columns their proper types so the rest of the code sees the
+     * same thing on every server.
+     */
+    private static function typed(array $rows): array
+    {
+        static $ints = ['id', 'has_cover', 'n', 'rating', 'book', 'author', 'tag', 'series', 'publisher'];
+        foreach ($rows as &$r) {
+            foreach ($ints as $k) {
+                if (isset($r[$k]) && is_string($r[$k]) && is_numeric($r[$k])) {
+                    $r[$k] = (int) $r[$k];
+                }
+            }
+            if (isset($r['series_index'])) {
+                $r['series_index'] = (float) $r['series_index'];
+            }
+        }
+        return $rows;
+    }
+
     public static function open(): ?Catalog
     {
         if (!is_file(LIBRARY_DB) || filesize(LIBRARY_DB) === 0) {
@@ -56,7 +77,7 @@ final class Catalog
         $st->bindValue(':lim', $perPage, PDO::PARAM_INT);
         $st->bindValue(':off', max(0, ($page - 1) * $perPage), PDO::PARAM_INT);
         $st->execute();
-        $books = $st->fetchAll();
+        $books = self::typed($st->fetchAll());
         $this->attachAuthors($books);
         return ['total' => $total, 'books' => $books];
     }
@@ -66,7 +87,7 @@ final class Catalog
         $st = $this->db->prepare(self::BOOK_COLUMNS . ' ORDER BY b.timestamp DESC LIMIT :lim');
         $st->bindValue(':lim', $limit, PDO::PARAM_INT);
         $st->execute();
-        $books = $st->fetchAll();
+        $books = self::typed($st->fetchAll());
         $this->attachAuthors($books);
         return $books;
     }
@@ -82,7 +103,7 @@ final class Catalog
                 GROUP BY t.id ORDER BY n DESC, t.name COLLATE NOCASE LIMIT " . (int) $limit;
         $st = $this->db->prepare($sql);
         $st->execute($params);
-        return $st->fetchAll();
+        return self::typed($st->fetchAll());
     }
 
     private const BOOK_COLUMNS = "SELECT b.id, b.title, b.timestamp, b.pubdate, b.last_modified, b.has_cover, b.series_index,
@@ -162,6 +183,7 @@ final class Catalog
         $st = $this->db->prepare(self::BOOK_COLUMNS . ' WHERE b.id = :id');
         $st->execute([':id' => $id]);
         $b = $st->fetch();
+        $b = $b ? self::typed([$b])[0] : false;
         if (!$b) {
             return null;
         }
@@ -172,12 +194,13 @@ final class Catalog
         $one = function (string $sql) use ($id) {
             $st = $this->db->prepare($sql);
             $st->execute([':id' => $id]);
-            return $st->fetch() ?: null;
+            $r = $st->fetch();
+            return $r ? self::typed([$r])[0] : null;
         };
         $all = function (string $sql) use ($id) {
             $st = $this->db->prepare($sql);
             $st->execute([':id' => $id]);
-            return $st->fetchAll();
+            return self::typed($st->fetchAll());
         };
 
         $b['series'] = $one('SELECT s.id, s.name FROM books_series_link x JOIN series s ON s.id = x.series WHERE x.book = :id');
@@ -203,7 +226,7 @@ final class Catalog
         $st->bindValue(':a', $authorId, PDO::PARAM_INT);
         $st->bindValue(':lim', $limit, PDO::PARAM_INT);
         $st->execute();
-        $books = $st->fetchAll();
+        $books = self::typed($st->fetchAll());
         $this->attachAuthors($books);
         return $books;
     }
@@ -212,22 +235,22 @@ final class Catalog
 
     public function authors(): array
     {
-        return $this->db->query('SELECT a.id, a.name, a.sort, COUNT(*) AS n FROM authors a JOIN books_authors_link l ON l.author = a.id GROUP BY a.id ORDER BY COALESCE(NULLIF(a.sort, \'\'), a.name) COLLATE NOCASE')->fetchAll();
+        return self::typed($this->db->query('SELECT a.id, a.name, a.sort, COUNT(*) AS n FROM authors a JOIN books_authors_link l ON l.author = a.id GROUP BY a.id ORDER BY COALESCE(NULLIF(a.sort, \'\'), a.name) COLLATE NOCASE')->fetchAll());
     }
 
     public function subjects(): array
     {
-        return $this->db->query('SELECT t.id, t.name, COUNT(*) AS n FROM tags t JOIN books_tags_link l ON l.tag = t.id GROUP BY t.id ORDER BY t.name COLLATE NOCASE')->fetchAll();
+        return self::typed($this->db->query('SELECT t.id, t.name, COUNT(*) AS n FROM tags t JOIN books_tags_link l ON l.tag = t.id GROUP BY t.id ORDER BY t.name COLLATE NOCASE')->fetchAll());
     }
 
     public function topSubjects(int $limit): array
     {
-        return $this->db->query('SELECT t.id, t.name, COUNT(*) AS n FROM tags t JOIN books_tags_link l ON l.tag = t.id GROUP BY t.id ORDER BY n DESC, t.name COLLATE NOCASE LIMIT ' . (int) $limit)->fetchAll();
+        return self::typed($this->db->query('SELECT t.id, t.name, COUNT(*) AS n FROM tags t JOIN books_tags_link l ON l.tag = t.id GROUP BY t.id ORDER BY n DESC, t.name COLLATE NOCASE LIMIT ' . (int) $limit)->fetchAll());
     }
 
     public function seriesList(): array
     {
-        return $this->db->query('SELECT s.id, s.name, COUNT(*) AS n FROM series s JOIN books_series_link l ON l.series = s.id GROUP BY s.id ORDER BY COALESCE(NULLIF(s.sort, \'\'), s.name) COLLATE NOCASE')->fetchAll();
+        return self::typed($this->db->query('SELECT s.id, s.name, COUNT(*) AS n FROM series s JOIN books_series_link l ON l.series = s.id GROUP BY s.id ORDER BY COALESCE(NULLIF(s.sort, \'\'), s.name) COLLATE NOCASE')->fetchAll());
     }
 
     /** Name of an author, tag, series or publisher by id. */

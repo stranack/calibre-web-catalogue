@@ -28,7 +28,7 @@ $langs = array_filter(array_map('language_name', $b['languages']));
 $more = [];
 $moreAuthor = $b['authors'][0] ?? null;
 if ($moreAuthor) {
-    $more = $cat->moreByAuthor($moreAuthor['id'], $b['id'], 12);
+    $more = $cat->moreByAuthor((int) $moreAuthor['id'], (int) $b['id'], 12);
 }
 $inSeries = [];
 if ($b['series']) {
