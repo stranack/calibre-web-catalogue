@@ -62,7 +62,8 @@ page_top($b['title']);
       <?php if ($b['tags']): ?>
       <ul class="chips book-tags" aria-label="Subjects">
         <?php foreach ($b['tags'] as $t): ?>
-        <li><a class="chip" href="<?= h(link_to('index.php', ['tag' => (int) $t['id']])) ?>"><?= h($t['name']) ?></a></li>
+        <?php [$broad, $narrow] = split_subject((string) $t['name']); ?>
+        <li><a class="chip" href="<?= h(link_to('index.php', $narrow === null ? ['subject' => $broad] : ['tag' => (int) $t['id']])) ?>"><?php if ($narrow !== null): ?><span class="chip-k"><?= h($broad) ?> ›</span> <?= h($narrow) ?><?php else: ?><?= h($broad) ?><?php endif; ?></a></li>
         <?php endforeach; ?>
       </ul>
       <?php endif; ?>

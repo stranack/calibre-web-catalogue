@@ -19,8 +19,11 @@ if ($by === 'authors') {
     $title = 'Authors';
     $intro = number_format(count($rows)) . ' authors, sorted by surname.';
     $keyOf = fn($r) => (string) ($r['sort'] ?: $r['name']);
+} elseif ($by === 'subjects' && $cat->hierarchical()) {
+    subjects_page($cat->subjectTree());
+    exit;
 } elseif ($by === 'subjects') {
-    $rows = $cat->subjects();
+    $rows = array_values(array_map(fn($n) => ['id' => $n['id'], 'name' => $n['name'], 'n' => $n['n']], $cat->subjectTree()));
     $param = 'tag';
     $title = 'Subjects';
     $intro = number_format(count($rows)) . ' subjects, taken from the tags in Calibre.';
@@ -78,3 +81,41 @@ page_top($title, ['active' => $by]);
   </section>
 <?php
 page_bottom();
+
+/** Two-level subject index: each broad heading with its narrower headings beneath. */
+function subjects_page(array $tree): void
+{
+    $narrowCount = array_sum(array_map(fn($n) => count($n['children']), $tree));
+    page_top('Subjects', ['active' => 'subjects']);
+    ?>
+  <section class="browse">
+    <div class="results-head">
+      <h1>Subjects</h1>
+      <p class="count"><?= count($tree) ?> broad subjects and <?= $narrowCount ?> narrower ones, from the tags in Calibre.</p>
+    </div>
+
+    <nav class="letters subject-jump" aria-label="Jump to subject">
+      <?php foreach ($tree as $key => $node): ?><a href="#subject-<?= h(md5($key)) ?>"><?= h($node['name']) ?></a><?php endforeach; ?>
+    </nav>
+
+    <div class="subject-groups">
+      <?php foreach ($tree as $key => $node): ?>
+      <section class="subject-group" id="subject-<?= h(md5($key)) ?>" aria-labelledby="sh-<?= h(md5($key)) ?>">
+        <h2 class="subject-head" id="sh-<?= h(md5($key)) ?>">
+          <a href="<?= h(link_to('index.php', ['subject' => $node['name']])) ?>"><?= h($node['name']) ?></a>
+          <span class="ix-n"><?= (int) $node['n'] ?> <?= $node['n'] === 1 ? 'book' : 'books' ?></span>
+        </h2>
+        <?php if ($node['children']): ?>
+        <ul class="subject-list">
+          <?php foreach ($node['children'] as $c): ?>
+          <li><a href="<?= h(link_to('index.php', ['tag' => (int) $c['id']])) ?>"><span class="ix-name"><?= h($c['name']) ?></span> <span class="ix-n"><?= (int) $c['n'] ?></span></a></li>
+          <?php endforeach; ?>
+        </ul>
+        <?php endif; ?>
+      </section>
+      <?php endforeach; ?>
+    </div>
+  </section>
+<?php
+    page_bottom();
+}

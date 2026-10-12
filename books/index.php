@@ -14,9 +14,11 @@ $f = [
     'tag'       => (int) ($_GET['tag'] ?? 0),
     'series'    => (int) ($_GET['series'] ?? 0),
     'publisher' => (int) ($_GET['publisher'] ?? 0),
+    'subject'   => trim((string) ($_GET['subject'] ?? '')),
 ];
 $f['q'] = mb_substr($f['q'], 0, 200);
-$filtered = $f['q'] !== '' || $f['author'] || $f['tag'] || $f['series'] || $f['publisher'];
+$f['subject'] = mb_substr($f['subject'], 0, 100);
+$filtered = $f['q'] !== '' || $f['author'] || $f['tag'] || $f['series'] || $f['publisher'] || $f['subject'] !== '';
 
 $sorts = ['title' => 'Title', 'author' => 'Author', 'added' => 'Recently added', 'published' => 'Newest published'];
 if ($f['q'] !== '') {
@@ -39,6 +41,10 @@ $linkFor = fn(int $p) => link_to('index.php', $params + ['page' => $p]);
 // Headings and removable filter chips
 $chips = [];
 $heading = 'All books';
+if ($f['subject'] !== '') {
+    $name = $cat->broadHeadings()[mb_strtolower($f['subject'])] ?? $f['subject'];
+    $chips[] = ['label' => 'Subject', 'name' => $name, 'href' => link_to('index.php', array_merge($params, ['subject' => '']))];
+}
 $labels = ['author' => 'Author', 'tag' => 'Subject', 'series' => 'Series', 'publisher' => 'Publisher'];
 foreach ($labels as $k => $label) {
     if ($f[$k]) {
@@ -92,7 +98,7 @@ if (!$filtered) {
     </div>
     <ul class="chips">
       <?php foreach ($topSubjects as $t): ?>
-      <li><a class="chip" href="<?= h(link_to('index.php', ['tag' => (int) $t['id']])) ?>"><?= h($t['name']) ?> <span class="chip-n"><?= (int) $t['n'] ?></span></a></li>
+      <li><a class="chip" href="<?= h(link_to('index.php', $t['params'])) ?>"><?= h($t['label']) ?> <span class="chip-n"><?= (int) $t['n'] ?></span></a></li>
       <?php endforeach; ?>
     </ul>
   </section>
@@ -113,7 +119,7 @@ if (!$filtered) {
 
 // Filtered or searched view
 $refine = $cat->subjectsWithin($f, 14);
-$refine = array_values(array_filter($refine, fn($t) => (int) $t['id'] !== $f['tag'] && (int) $t['n'] < $result['total']));
+$refine = array_values(array_filter($refine, fn($t) => $t['n'] < $result['total']));
 
 page_top($f['q'] !== '' ? 'Search: ' . $f['q'] : $heading, ['q' => $f['q']]);
 ?>
@@ -144,7 +150,7 @@ page_top($f['q'] !== '' ? 'Search: ' . $f['q'] : $heading, ['q' => $f['q']]);
           <span class="refine-label">Narrow by subject</span>
           <ul class="chips">
             <?php foreach ($refine as $t): ?>
-            <li><a class="chip" href="<?= h(link_to('index.php', array_merge($params, ['tag' => (int) $t['id'], 'page' => 1]))) ?>"><?= h($t['name']) ?> <span class="chip-n"><?= (int) $t['n'] ?></span></a></li>
+            <li><a class="chip" href="<?= h(link_to('index.php', array_merge($params, $t['params'], ['page' => 1]))) ?>"><?= h($t['label']) ?> <span class="chip-n"><?= (int) $t['n'] ?></span></a></li>
             <?php endforeach; ?>
           </ul>
         </div>

@@ -33,6 +33,27 @@ function cover_url(array $b): ?string
     return 'covers/' . (int) $b['id'] . '.jpg?v=' . substr(md5((string) $b['last_modified']), 0, 8);
 }
 
+/**
+ * Split a Calibre tag into its broad heading and narrower heading.
+ * "History.Canada" gives ["History", "Canada"]; "Poetry" gives ["Poetry", null].
+ */
+function split_subject(string $tag): array
+{
+    $pos = strpos($tag, '.');
+    if ($pos === false) {
+        return [trim($tag), null];
+    }
+    $narrow = trim(substr($tag, $pos + 1));
+    return [trim(substr($tag, 0, $pos)), $narrow === '' ? null : $narrow];
+}
+
+/** "History.Canada" becomes "History › Canada" for display. */
+function subject_label(string $tag): string
+{
+    [$broad, $narrow] = split_subject($tag);
+    return $narrow === null ? $broad : $broad . ' › ' . $narrow;
+}
+
 function author_names(array $b, int $max = 3): string
 {
     $names = array_column($b['authors'] ?? [], 'name');

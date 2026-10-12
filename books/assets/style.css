@@ -321,6 +321,21 @@ main { max-width: var(--wrap); margin: 0 auto; padding: 0 var(--gutter) 64px; }
 .index-list a:hover .ix-name { text-decoration: underline; }
 .ix-n { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 
+/* Two-level subjects */
+.subject-jump a { min-width: 0; padding: 6px 10px; font-weight: 500; font-size: 0.9rem; }
+.subject-groups { columns: 20rem 3; column-gap: 40px; }
+.subject-group { break-inside: avoid; margin-bottom: 30px; scroll-margin-top: 80px; }
+.subject-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  font-size: 1.3rem; font-weight: 500; padding-bottom: 6px; margin-bottom: 4px; border-bottom: 2px solid var(--accent-wash);
+}
+.subject-head a { color: var(--accent); text-decoration: none; }
+.subject-head a:hover { text-decoration: underline; }
+.subject-head .ix-n { font: 400 0.85rem var(--sans); }
+.subject-list { list-style: none; margin: 0; padding: 0; }
+.subject-list a { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--wash); }
+.subject-list a:hover .ix-name { text-decoration: underline; }
+
 /* ---- Footer --------------------------------------------------------- */
 
 .foot { border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.88rem; }

@@ -86,7 +86,13 @@ Each run takes a second or two when nothing has changed. If you can't use cron, 
 
 When you add or edit a book, Calibre saves `metadata.db` and Dropbox uploads it. At the next check the site downloads the file, rebuilds its catalogue, fetches covers for new or changed books and removes covers of books you've deleted. **Sync now** on the admin page does the same thing on demand, and **Full refresh** also retries covers that failed before.
 
-Subjects come from Calibre's **Tags** column and series from the **Series** column, so tagging books in Calibre fills out those pages.
+Subjects come from Calibre's **Tags** column and series from the **Series** column.
+
+### Two-level subjects
+
+Tags written as `Broad.Narrow`, such as `History.Canada` or `Buddhism.Zen`, are shown as two levels: the Subjects page lists each broad heading with its narrower headings beneath, the home page offers the broad headings, and a broad heading's results can be narrowed further. This is the same convention Calibre uses for hierarchical tags. To see them as a tree in Calibre too, add **tags** under *Preferences → Look & feel → Tag browser → Categories with hierarchical items*.
+
+When a library has any tags in this form, one-off tags that don't fit the scheme are left off the site (they stay in Calibre). A library with no dotted tags shows every tag, as before.
 
 ## Privacy
 

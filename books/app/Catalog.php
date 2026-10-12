@@ -92,7 +92,10 @@ final class Catalog
         return $books;
     }
 
-    /** Subjects (Calibre tags) that appear among the books matching $f. */
+    /**
+     * Subjects that appear among the books matching $f, for "Narrow by subject".
+     * Each item: label, n, params (link parameters that add this subject).
+     */
     public function subjectsWithin(array $f, int $limit): array
     {
         $params = [];
@@ -100,10 +103,110 @@ final class Catalog
         $sql = "SELECT t.id, t.name, COUNT(*) AS n
                 FROM books_tags_link l JOIN tags t ON t.id = l.tag
                 WHERE l.book IN (SELECT b.id FROM books b $where)
-                GROUP BY t.id ORDER BY n DESC, t.name COLLATE NOCASE LIMIT " . (int) $limit;
+                GROUP BY t.id ORDER BY n DESC, t.name COLLATE NOCASE";
         $st = $this->db->prepare($sql);
         $st->execute($params);
-        return self::typed($st->fetchAll());
+        $active = mb_strtolower((string) ($f['subject'] ?? ''));
+        $out = [];
+        foreach (self::typed($st->fetchAll()) as $t) {
+            if (!$this->isShownTag($t['name']) || $t['id'] === (int) ($f['tag'] ?? 0)) {
+                continue;
+            }
+            [$broad, $narrow] = split_subject($t['name']);
+            if ($narrow === null) {
+                continue; // a broad heading on its own adds nothing as a refinement
+            }
+            $within = $active !== '' && mb_strtolower($broad) === $active;
+            $out[] = [
+                'label'  => $within ? $narrow : subject_label($t['name']),
+                'n'      => $t['n'],
+                // Picking a narrower heading inside the current broad one replaces it.
+                'params' => $within ? ['tag' => $t['id'], 'subject' => ''] : ['tag' => $t['id']],
+            ];
+            if (count($out) >= $limit) {
+                break;
+            }
+        }
+        return $out;
+    }
+
+    // ---- Two-level subjects ------------------------------------------
+    //
+    // Tags written as "Broad.Narrow" (Calibre's own convention for
+    // hierarchical tags) are shown as two levels. When a library has such
+    // tags, other one-off tags are hidden unless they match a broad heading.
+    // A library without any dotted tags shows every tag, as before.
+
+    private ?array $broads = null;
+
+    /** @return array<string,string> lower-case broad heading => display form */
+    public function broadHeadings(): array
+    {
+        if ($this->broads === null) {
+            $this->broads = [];
+            foreach ($this->db->query("SELECT name FROM tags WHERE name LIKE '%.%'") as $r) {
+                [$b] = split_subject((string) $r['name']);
+                if ($b !== '') {
+                    $this->broads[mb_strtolower($b)] = $b;
+                }
+            }
+        }
+        return $this->broads;
+    }
+
+    public function hierarchical(): bool
+    {
+        return $this->broadHeadings() !== [];
+    }
+
+    public function isShownTag(string $name): bool
+    {
+        if (!$this->hierarchical()) {
+            return true;
+        }
+        [$b] = split_subject($name);
+        return isset($this->broads[mb_strtolower($b)]);
+    }
+
+    /**
+     * Every subject with book counts. Hierarchical libraries get
+     * [broad => ['name', 'n', 'children' => [['id','name','n'], ...]]];
+     * flat libraries get one entry per tag with no children.
+     */
+    public function subjectTree(): array
+    {
+        $tree = [];
+        $books = [];
+        foreach ($this->db->query('SELECT t.id, t.name, l.book FROM tags t JOIN books_tags_link l ON l.tag = t.id') as $r) {
+            $name = (string) $r['name'];
+            if (!$this->isShownTag($name)) {
+                continue;
+            }
+            $id = (int) $r['id'];
+            if ($this->hierarchical()) {
+                [$broad, $narrow] = split_subject($name);
+                $key = mb_strtolower($broad);
+                $tree[$key]['name'] = $this->broads[$key] ?? $broad;
+                $tree[$key]['children'] ??= [];
+                $books[$key][(int) $r['book']] = true;
+                if ($narrow !== null) {
+                    $tree[$key]['children'][$id]['id'] = $id;
+                    $tree[$key]['children'][$id]['name'] = $narrow;
+                    $tree[$key]['children'][$id]['n'] = ($tree[$key]['children'][$id]['n'] ?? 0) + 1;
+                }
+            } else {
+                $key = 't' . $id;
+                $tree[$key] = ['name' => $name, 'id' => $id, 'children' => []];
+                $books[$key][(int) $r['book']] = true;
+            }
+        }
+        foreach ($tree as $key => &$node) {
+            $node['n'] = count($books[$key]);
+            usort($node['children'], fn($a, $b) => strcasecmp($a['name'], $b['name']));
+        }
+        unset($node);
+        uasort($tree, fn($a, $b) => strcasecmp($a['name'], $b['name']));
+        return $tree;
     }
 
     private const BOOK_COLUMNS = "SELECT b.id, b.title, b.timestamp, b.pubdate, b.last_modified, b.has_cover, b.series_index,
@@ -119,6 +222,12 @@ final class Catalog
                 $c[] = "EXISTS (SELECT 1 FROM $table x WHERE x.book = b.id AND x.$col = :$key)";
                 $params[":$key"] = (int) $f[$key];
             }
+        }
+        $subject = trim((string) ($f['subject'] ?? ''));
+        if ($subject !== '') {
+            $c[] = "EXISTS (SELECT 1 FROM books_tags_link x JOIN tags t ON t.id = x.tag WHERE x.book = b.id AND (t.name = :subject OR t.name LIKE :subject_like ESCAPE '\\'))";
+            $params[':subject'] = $subject;
+            $params[':subject_like'] = addcslashes($subject, '%_\\') . '.%';
         }
         $q = trim((string) ($f['q'] ?? ''));
         if ($q !== '') {
@@ -209,7 +318,10 @@ final class Catalog
         $b['rating'] = $r ? (int) $r['rating'] : 0;
         $c = $one('SELECT text FROM comments WHERE book = :id');
         $b['description'] = $c['text'] ?? '';
-        $b['tags'] = $all('SELECT t.id, t.name FROM books_tags_link x JOIN tags t ON t.id = x.tag WHERE x.book = :id ORDER BY t.name COLLATE NOCASE');
+        $b['tags'] = array_values(array_filter(
+            $all('SELECT t.id, t.name FROM books_tags_link x JOIN tags t ON t.id = x.tag WHERE x.book = :id ORDER BY t.name COLLATE NOCASE'),
+            fn($t) => $this->isShownTag((string) $t['name'])
+        ));
         $b['languages'] = array_column($all('SELECT l.lang_code FROM books_languages_link x JOIN languages l ON l.id = x.lang_code WHERE x.book = :id ORDER BY x.item_order'), 'lang_code');
         $b['identifiers'] = [];
         foreach ($all('SELECT type, val FROM identifiers WHERE book = :id') as $row) {
@@ -238,14 +350,23 @@ final class Catalog
         return self::typed($this->db->query('SELECT a.id, a.name, a.sort, COUNT(*) AS n FROM authors a JOIN books_authors_link l ON l.author = a.id GROUP BY a.id ORDER BY COALESCE(NULLIF(a.sort, \'\'), a.name) COLLATE NOCASE')->fetchAll());
     }
 
-    public function subjects(): array
-    {
-        return self::typed($this->db->query('SELECT t.id, t.name, COUNT(*) AS n FROM tags t JOIN books_tags_link l ON l.tag = t.id GROUP BY t.id ORDER BY t.name COLLATE NOCASE')->fetchAll());
-    }
-
+    /**
+     * Subjects for the home page, biggest first. Broad headings in a
+     * hierarchical library, otherwise individual tags.
+     * Each item: label, n, params.
+     */
     public function topSubjects(int $limit): array
     {
-        return self::typed($this->db->query('SELECT t.id, t.name, COUNT(*) AS n FROM tags t JOIN books_tags_link l ON l.tag = t.id GROUP BY t.id ORDER BY n DESC, t.name COLLATE NOCASE LIMIT ' . (int) $limit)->fetchAll());
+        $out = [];
+        foreach ($this->subjectTree() as $node) {
+            $out[] = [
+                'label'  => $node['name'],
+                'n'      => $node['n'],
+                'params' => isset($node['id']) ? ['tag' => $node['id']] : ['subject' => $node['name']],
+            ];
+        }
+        usort($out, fn($a, $b) => $b['n'] <=> $a['n'] ?: strcasecmp($a['label'], $b['label']));
+        return array_slice($out, 0, $limit);
     }
 
     public function seriesList(): array
@@ -263,7 +384,10 @@ final class Catalog
         $st = $this->db->prepare("SELECT name FROM $table WHERE id = :id");
         $st->execute([':id' => $id]);
         $n = $st->fetchColumn();
-        return $n === false ? null : (string) $n;
+        if ($n === false) {
+            return null;
+        }
+        return $kind === 'tag' ? subject_label((string) $n) : (string) $n;
     }
 
     public function stats(): array
