@@ -83,7 +83,12 @@ page_top($b['title']);
           </dd></div>
           <?php endforeach; ?>
           <?php $files = array_values(array_filter($b['files'], fn($x) => stripos((string) $x['format'], 'ORIGINAL_') !== 0)); ?>
-          <?php if ($files && show_dropbox_links() && $b['path'] !== ''): ?>
+          <?php if ($files && is_owner() && $b['path'] !== ''): ?>
+          <div><dt>Files</dt><dd class="dropbox-links">
+            <?php foreach ($files as $j => $fl): $fname = $fl['name'] . '.' . strtolower((string) $fl['format']); ?><?= $j ? ' ' : '' ?><a class="file-link" href="<?= h(book_file_url($b, (string) $fl['format'])) ?>" title="Download <?= h($fname) ?> to open in your reading app"><?= h($fl['format']) ?></a><?php endforeach; ?>
+            <?php if (show_dropbox_links()): ?><a class="ext" href="<?= h(dropbox_web_url($b['path'])) ?>" target="_blank" rel="noopener noreferrer">Open the book's folder in Dropbox</a><?php endif; ?>
+          </dd></div>
+          <?php elseif ($files && show_dropbox_links() && $b['path'] !== ''): ?>
           <div><dt>Files</dt><dd class="dropbox-links">
             <?php foreach ($files as $j => $fl): $fname = $fl['name'] . '.' . strtolower((string) $fl['format']); ?><?= $j ? ' ' : '' ?><a class="file-link" href="<?= h(dropbox_web_url($b['path'], $fname)) ?>" target="_blank" rel="noopener noreferrer" title="Open <?= h($fname) ?> in Dropbox"><?= h($fl['format']) ?></a><?php endforeach; ?>
             <a class="ext" href="<?= h(dropbox_web_url($b['path'])) ?>" target="_blank" rel="noopener noreferrer">Open the book's folder in Dropbox</a>

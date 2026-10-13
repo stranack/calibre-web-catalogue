@@ -72,6 +72,39 @@ function dropbox_web_url(string $relPath, ?string $file = null): string
     return $file === null ? $url : $url . '?preview=' . rawurlencode($file);
 }
 
+/**
+ * Address of file.php for one of a book's formats. The file itself is only
+ * ever handed to the signed-in owner; file.php checks that on every request.
+ */
+function book_file_url(array $b, string $format): string
+{
+    return link_to('file.php', ['id' => (int) $b['id'], 'format' => strtoupper($format)]);
+}
+
+/**
+ * Media type for an ebook format. Sending the right type is what lets a
+ * tablet offer the matching reader app (Moon+ Reader, Apple Books and so on)
+ * when the download finishes.
+ */
+function ebook_mime(string $format): string
+{
+    return [
+        'EPUB' => 'application/epub+zip',
+        'KEPUB' => 'application/epub+zip',
+        'PDF'  => 'application/pdf',
+        'MOBI' => 'application/x-mobipocket-ebook',
+        'AZW'  => 'application/vnd.amazon.ebook',
+        'AZW3' => 'application/vnd.amazon.ebook',
+        'FB2'  => 'application/x-fictionbook+xml',
+        'CBZ'  => 'application/vnd.comicbook+zip',
+        'CBR'  => 'application/vnd.comicbook-rar',
+        'DJVU' => 'image/vnd.djvu',
+        'RTF'  => 'application/rtf',
+        'TXT'  => 'text/plain; charset=utf-8',
+        'DOCX' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ][strtoupper($format)] ?? 'application/octet-stream';
+}
+
 function cover_url(array $b): ?string
 {
     if (empty($b['has_cover'])) {

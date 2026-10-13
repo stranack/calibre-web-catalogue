@@ -177,6 +177,22 @@ final class DropboxSource implements LibrarySource
         return $out;
     }
 
+    /**
+     * A short-lived direct download address for one file in the library.
+     * Dropbox keeps the link valid for four hours. Needs only the read
+     * permission the site already has.
+     * @return array{link:string,size:?int}
+     */
+    public function temporaryLink(string $relPath): array
+    {
+        $r = $this->rpc('/2/files/get_temporary_link', ['path' => $this->libraryPath . '/' . ltrim($relPath, '/')]);
+        if (empty($r['link'])) {
+            throw new RuntimeException('Dropbox did not return a download link for ' . $relPath);
+        }
+        $size = $r['metadata']['size'] ?? null;
+        return ['link' => (string) $r['link'], 'size' => $size === null ? null : (int) $size];
+    }
+
     /** Account name, used by the admin page to confirm the connection works. */
     public function accountName(): string
     {
@@ -325,6 +341,42 @@ function http_post(string $url, array $headers, string $body, ?string $contentTy
     $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
     curl_close($ch);
     return [$status, $sink ? '' : $result, $respHeaders];
+}
+
+/**
+ * Pass a remote file straight through to the visitor without holding it in
+ * memory. $begin is called once, just before the first byte goes out, so the
+ * caller can send its own headers then. Returns false if the remote server
+ * failed before anything was sent, in which case nothing has been output.
+ */
+function stream_url_to_output(string $url, callable $begin): bool
+{
+    if (!function_exists('curl_init')) {
+        throw new RuntimeException('The PHP curl extension is not available on this server.');
+    }
+    $started = false;
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS      => 3,
+        CURLOPT_CONNECTTIMEOUT => 20,
+        CURLOPT_TIMEOUT        => 900,
+        CURLOPT_WRITEFUNCTION  => function ($ch, $data) use (&$started, $begin) {
+            if (!$started) {
+                if ((int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE) !== 200) {
+                    return 0; // stop: an error page from the remote end is not the book
+                }
+                $begin();
+                $started = true;
+            }
+            echo $data;
+            flush();
+            return strlen($data);
+        },
+    ]);
+    curl_exec($ch);
+    curl_close($ch);
+    return $started;
 }
 
 /** Build the configured source, or explain why it can't be built. */
