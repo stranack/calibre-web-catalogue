@@ -182,6 +182,22 @@ page_top('Admin', ['search' => false, 'noindex' => true, 'class' => 'admin']);
     </div>
     <?php endif; ?>
 
+    <?php $subjectFlags = $state['subject_flags'] ?? []; if ($subjectFlags): ?>
+    <div class="panel">
+      <h2>Subjects check</h2>
+      <p class="hint">These books have no tag in the curated subject list - usually because they arrived with raw import tags instead of a real subject. They need a Broad.Narrow tag set in Calibre (for example "Fiction.Historical").</p>
+      <ul class="series-flags">
+        <?php foreach (array_slice($subjectFlags, 0, 50) as $f): ?>
+        <li>
+          <strong><?= h($f['title']) ?></strong><?php if ($f['author']): ?> — <?= h($f['author']) ?><?php endif; ?>
+          <br><span class="hint">Current tags: <?= $f['tags'] ? h(implode(', ', $f['tags'])) : '(none)' ?></span>
+        </li>
+        <?php endforeach; ?>
+      </ul>
+      <?php if (count($subjectFlags) > 50): ?><p class="hint"><?= count($subjectFlags) - 50 ?> more not shown.</p><?php endif; ?>
+    </div>
+    <?php endif; ?>
+
     <?php if ($connected || $usingLocal): ?>
     <div class="panel">
       <h2>Sync</h2>

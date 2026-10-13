@@ -65,6 +65,7 @@ final class Sync
             }
             $state['book_count'] = (int) $db->query('SELECT COUNT(*) FROM books')->fetchColumn();
             $state['series_flags'] = check_series_watchlist($db);
+            $state['subject_flags'] = check_subject_taxonomy($db);
             $db = null;
 
             $have = $state['covers'] ?? [];
@@ -340,6 +341,68 @@ function check_series_watchlist(PDO $db): array
                 'current' => $current,
                 'added' => $current - $baseline,
                 'note' => $entry['note'] ?? null,
+            ];
+        }
+    }
+    return $flags;
+}
+
+/**
+ * Flags any book with no tag matching the curated Broad.Narrow taxonomy
+ * (app/subject_taxonomy.json). A book this age picks this up almost always
+ * because it arrived with raw import tags - BISAC codes, publisher
+ * boilerplate, character names - instead of a real subject, the same
+ * problem "Amazon.com" as a top-level heading turned out to be.
+ *
+ * Read-only, like check_series_watchlist(): it reports, it never retags
+ * anything. Fixing a flagged book's subjects is still a manual step.
+ */
+function check_subject_taxonomy(PDO $db): array
+{
+    $file = APP_DIR . '/subject_taxonomy.json';
+    if (!is_file($file)) {
+        return [];
+    }
+    $data = json_decode((string) file_get_contents($file), true);
+    $broads = array_map('mb_strtolower', $data['broads'] ?? []);
+    if (!$broads) {
+        return [];
+    }
+
+    // One pass: every book's tag names, grouped by book id.
+    $tagsByBook = [];
+    foreach ($db->query('
+        SELECT b.id, b.title, b.author_sort, t.name
+        FROM books b
+        LEFT JOIN books_tags_link btl ON btl.book = b.id
+        LEFT JOIN tags t ON t.id = btl.tag
+        ORDER BY b.id
+    ') as $r) {
+        $id = (int) $r['id'];
+        if (!isset($tagsByBook[$id])) {
+            $tagsByBook[$id] = ['title' => $r['title'], 'author' => $r['author_sort'], 'tags' => []];
+        }
+        if ($r['name'] !== null) {
+            $tagsByBook[$id]['tags'][] = $r['name'];
+        }
+    }
+
+    $flags = [];
+    foreach ($tagsByBook as $id => $b) {
+        $classified = false;
+        foreach ($b['tags'] as $tag) {
+            $broad = mb_strtolower(trim(strtok($tag, '.')));
+            if (in_array($broad, $broads, true)) {
+                $classified = true;
+                break;
+            }
+        }
+        if (!$classified) {
+            $flags[] = [
+                'id' => $id,
+                'title' => $b['title'],
+                'author' => $b['author'],
+                'tags' => $b['tags'],
             ];
         }
     }
