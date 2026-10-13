@@ -64,6 +64,7 @@ final class Sync
                 $wanted[(int) $r['id']] = ['path' => $r['path'] . '/cover.jpg', 'v' => $r['last_modified']];
             }
             $state['book_count'] = (int) $db->query('SELECT COUNT(*) FROM books')->fetchColumn();
+            $state['series_flags'] = check_series_watchlist($db);
             $db = null;
 
             $have = $state['covers'] ?? [];
@@ -295,6 +296,55 @@ const CATALOGUE_INDEXES = [
     'CREATE INDEX identifiers_book ON identifiers (book)',
     'CREATE INDEX data_book ON data (book)',
 ];
+
+/**
+ * Compares each watched author's current book count (in the freshly-synced
+ * catalogue) against the count recorded the last time their series metadata
+ * was reviewed (app/series_watchlist.json). A higher count means a book was
+ * added since that review and may belong in the series but isn't tagged yet.
+ *
+ * This only reads and reports - it never changes any data. Fixing a flagged
+ * book's series metadata is still a manual step in Calibre.
+ */
+function check_series_watchlist(PDO $db): array
+{
+    $file = APP_DIR . '/series_watchlist.json';
+    if (!is_file($file)) {
+        return [];
+    }
+    $data = json_decode((string) file_get_contents($file), true);
+    $authors = $data['authors'] ?? [];
+    if (!$authors) {
+        return [];
+    }
+
+    $flags = [];
+    $stmt = $db->prepare(
+        'SELECT COUNT(*) FROM books_authors_link bal
+         JOIN authors a ON a.id = bal.author
+         WHERE a.name = :name COLLATE NOCASE'
+    );
+    foreach ($authors as $entry) {
+        $name = (string) ($entry['name'] ?? '');
+        $baseline = (int) ($entry['book_count'] ?? 0);
+        if ($name === '') {
+            continue;
+        }
+        $stmt->execute(['name' => $name]);
+        $current = (int) $stmt->fetchColumn();
+        if ($current > $baseline) {
+            $flags[] = [
+                'name' => $name,
+                'series' => (string) ($entry['series'] ?? ''),
+                'baseline' => $baseline,
+                'current' => $current,
+                'added' => $current - $baseline,
+                'note' => $entry['note'] ?? null,
+            ];
+        }
+    }
+    return $flags;
+}
 
 /** Copy the catalogue tables from Calibre's metadata.db into a fresh database. Returns the book count. */
 function build_catalogue(string $calibreDb, string $dest): int

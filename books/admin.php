@@ -165,6 +165,23 @@ page_top('Admin', ['search' => false, 'noindex' => true, 'class' => 'admin']);
     </div>
     <?php endif; ?>
 
+    <?php $seriesFlags = $state['series_flags'] ?? []; if ($seriesFlags): ?>
+    <div class="panel">
+      <h2>Series check</h2>
+      <p class="hint">These authors have more books in Calibre now than when their series metadata was last reviewed. The new book(s) may need a series name and number set in Calibre.</p>
+      <ul class="series-flags">
+        <?php foreach ($seriesFlags as $f): ?>
+        <li>
+          <strong><?= h($f['name']) ?></strong>
+          — <?= (int) $f['added'] ?> new since last check (<?= (int) $f['baseline'] ?> &rarr; <?= (int) $f['current'] ?>)
+          <?php if ($f['series']): ?>, usually in <em><?= h($f['series']) ?></em><?php endif; ?>
+          <?php if (!empty($f['note'])): ?><br><span class="hint"><?= h($f['note']) ?></span><?php endif; ?>
+        </li>
+        <?php endforeach; ?>
+      </ul>
+    </div>
+    <?php endif; ?>
+
     <?php if ($connected || $usingLocal): ?>
     <div class="panel">
       <h2>Sync</h2>
