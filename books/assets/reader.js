@@ -65,6 +65,13 @@
     if (f) {
       css += 'body, body *:not(code):not(pre):not(kbd):not(samp):not(tt) { font-family: ' + f + ' !important; }\n';
     }
+    if (settings.size > 100) {
+      // Larger text gets more room between lines: 1.54 at 110%, 1.7 at 150%,
+      // 1.9 at 200%. At 100% and below the book keeps its own spacing.
+      var lh = Math.min(1.9, 1.5 + (settings.size - 100) * 0.004).toFixed(2);
+      css += 'body, body * { line-height: ' + lh + ' !important; }\n' +
+        'h1, h2, h3, h4, h5, h6 { line-height: 1.25 !important; }\n';
+    }
     if (settings.theme === 'night') {
       css += 'img { opacity: 0.88; }\n';
     }
