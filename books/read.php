@@ -47,6 +47,7 @@ $config = [
     'saveUrl'  => 'reading.php',
     'settings' => $data['settings'],
     'position' => reading_position((int) $b['id']),
+    'bookmarks' => book_bookmarks((int) $b['id']),
 ];
 $v = fn(string $f) => h((string) @filemtime(APP_ROOT . '/' . $f));
 $theme = $data['settings']['theme'];
@@ -74,6 +75,10 @@ $theme = $data['settings']['theme'];
     <h1 class="rd-title"><?= h($b['title']) ?></h1>
     <p class="rd-chapter" id="rd-chapter"></p>
   </div>
+  <button type="button" class="rd-tool" id="rd-mark-btn" aria-pressed="false" disabled>
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path class="rd-ribbon" d="M6.5 3.5h11v17l-5.5-4-5.5 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+    <span class="rd-tool-label" id="rd-mark-label">Bookmark</span>
+  </button>
   <button type="button" class="rd-tool" id="rd-toc-btn" aria-controls="rd-toc" aria-expanded="false">
     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     <span class="rd-tool-label">Contents</span>
@@ -100,14 +105,26 @@ $theme = $data['settings']['theme'];
   <div class="rd-status" id="rd-status" role="status">Opening the book…</div>
 </div>
 
+<div class="rd-toast" id="rd-toast" role="status" aria-live="polite" hidden></div>
+
 <footer class="rd-foot">
   <div class="rd-progress" aria-hidden="true"><div class="rd-progress-fill" id="rd-progress-fill"></div></div>
   <p class="rd-where" id="rd-where"></p>
 </footer>
 
-<nav class="rd-panel rd-panel-toc" id="rd-toc" aria-label="Contents" hidden>
-  <div class="rd-panel-head"><h2>Contents</h2><button type="button" class="rd-close" data-close aria-label="Close contents">×</button></div>
-  <ol class="rd-toc-list" id="rd-toc-list"><li class="rd-muted">Loading…</li></ol>
+<nav class="rd-panel rd-panel-toc" id="rd-toc" aria-label="Contents and bookmarks" hidden>
+  <div class="rd-panel-head">
+    <div class="rd-tabs" role="tablist">
+      <button type="button" role="tab" id="rd-tab-toc" aria-selected="true" aria-controls="rd-toc-list">Contents</button>
+      <button type="button" role="tab" id="rd-tab-marks" aria-selected="false" aria-controls="rd-marks" tabindex="-1">Bookmarks<span class="rd-count" id="rd-marks-count"></span></button>
+    </div>
+    <button type="button" class="rd-close" data-close aria-label="Close contents and bookmarks">×</button>
+  </div>
+  <ol class="rd-toc-list" id="rd-toc-list" role="tabpanel" aria-labelledby="rd-tab-toc"><li class="rd-muted">Loading…</li></ol>
+  <div class="rd-marks" id="rd-marks" role="tabpanel" aria-labelledby="rd-tab-marks" hidden>
+    <ul class="rd-marks-list" id="rd-marks-list"></ul>
+    <p class="rd-muted" id="rd-marks-empty">No bookmarks yet. Tap <strong>Bookmark</strong> at the top to mark the page you're on.</p>
+  </div>
 </nav>
 
 <section class="rd-panel rd-panel-settings" id="rd-settings" aria-label="Display settings" hidden>

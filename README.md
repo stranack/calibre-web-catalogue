@@ -118,7 +118,9 @@ The `app/` and `data/` folders are blocked from the web by `.htaccess`, includin
 
 On a browser where you've signed in to `admin.php` (the browser is remembered for a year), books with an EPUB get a **Read** button, and the EPUB link opens the same reader. It shows one or two pages, with a choice of fonts (the book's own, Literata, Georgia or a sans serif), text size, and a white, sepia, grey or night background. Turn pages with the arrows, the keyboard, a tap near either edge, or a swipe.
 
-The reader saves your place and settings on the site (in `data/reading.json`), so you can stop on the tablet and carry on from the computer. The book page then says **Continue reading** and how far through you are. Other visitors can't open the reader.
+**Bookmark** in the reader's top bar (or the B key) marks the page you're on, and the **Bookmarks** tab beside Contents lists them with the chapter, how far through the book, and the page's opening words. **Full screen** (or the F key) hides the browser's toolbars where the browser allows it.
+
+The reader saves your place, bookmarks and settings on the site (in `data/reading.json`), so you can stop on the tablet and carry on from the computer. The book page then says **Continue reading** and how far through you are. Other visitors can't open the reader.
 
 The reader uses [epub.js](https://github.com/futurepress/epub.js) and [JSZip](https://github.com/Stuk/jszip), kept in `assets/vendor/` with their licences.
 

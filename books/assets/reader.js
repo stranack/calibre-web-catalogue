@@ -26,6 +26,7 @@
   var book = null;
   var rendition = null;
   var lastLocation = null;
+  var bookmarks = Array.isArray(cfg.bookmarks) ? cfg.bookmarks.slice() : [];
   var $ = function (id) { return document.getElementById(id); };
 
   // ---- Status messages ---------------------------------------------------
@@ -184,6 +185,7 @@
     $('rd-prev').disabled = !!loc.atStart;
     $('rd-next').disabled = !!loc.atEnd;
     markTocCurrent(loc && loc.start ? loc.start.href : '');
+    showMarkButton();
   }
 
   // ---- Contents ---------------------------------------------------------
@@ -224,6 +226,165 @@
       var match = !done && file && (b.dataset.href || '').split('#')[0].replace(/^.*\//, '') === file;
       if (match) { done = true; b.setAttribute('aria-current', 'true'); } else { b.removeAttribute('aria-current'); }
     });
+  }
+
+  // ---- Bookmarks --------------------------------------------------------
+
+  function cfiCompare(a, b) {
+    try { return new ePub.CFI().compare(a, b); } catch (e) { return a < b ? -1 : (a > b ? 1 : 0); }
+  }
+
+  /** The bookmark on the page (or pair of pages) now showing, if any. */
+  function markHere() {
+    var loc = lastLocation;
+    if (!loc || !loc.start || !loc.end) { return null; }
+    for (var i = 0; i < bookmarks.length; i++) {
+      var c = bookmarks[i].cfi;
+      if (c === loc.start.cfi || (cfiCompare(c, loc.start.cfi) >= 0 && cfiCompare(c, loc.end.cfi) <= 0)) {
+        return bookmarks[i];
+      }
+    }
+    return null;
+  }
+
+  function showMarkButton() {
+    var on = !!markHere();
+    var btn = $('rd-mark-btn');
+    btn.setAttribute('aria-pressed', String(on));
+    btn.setAttribute('aria-label', on ? 'Remove the bookmark on this page' : 'Bookmark this page');
+    $('rd-mark-label').textContent = on ? 'Bookmarked' : 'Bookmark';
+  }
+
+  /** The first words on the page, so the list shows what each bookmark is. */
+  function snippetAt(cfi) {
+    try {
+      var range = rendition.getRange(cfi);
+      if (!range) { return ''; }
+      var doc = range.startContainer.ownerDocument;
+      var walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+      var node = range.startContainer.nodeType === 3 ? range.startContainer : null;
+      var text = '';
+      if (node) {
+        walker.currentNode = node;
+        text = node.textContent.slice(range.startOffset);
+      } else {
+        walker.currentNode = range.startContainer;
+      }
+      while (text.replace(/\s+/g, ' ').trim().length < 140 && (node = walker.nextNode())) {
+        text += ' ' + node.textContent;
+      }
+      text = text.replace(/\s+/g, ' ').trim();
+      return text.length > 140 ? text.slice(0, 140).replace(/\s+\S*$/, '') + '…' : text;
+    } catch (e) {
+      return '';
+    }
+  }
+
+  var toastTimer = null;
+  function toast(text) {
+    var el = $('rd-toast');
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.hidden = true; }, 1800);
+  }
+
+  function saveMark(body) {
+    body.id = cfg.id;
+    return post(body).then(function (res) {
+      return res && res.ok ? res.json() : null;
+    }).then(function (data) {
+      if (data && Array.isArray(data.bookmarks)) {
+        bookmarks = data.bookmarks;
+        renderMarks();
+        showMarkButton();
+      }
+    }).catch(function () { /* kept locally; the next change tries again */ });
+  }
+
+  function toggleMark() {
+    if (!rendition || !lastLocation || !lastLocation.start) { return; }
+    var here = markHere();
+    if (here) {
+      bookmarks = bookmarks.filter(function (b) { return b !== here; });
+      toast('Bookmark removed');
+      saveMark({ removeBookmark: here.cfi });
+    } else {
+      var loc = lastLocation;
+      var mark = {
+        cfi: loc.start.cfi,
+        label: chapterLabel(loc.start.href) || '',
+        pct: percentFor(loc),
+        text: snippetAt(loc.start.cfi)
+      };
+      bookmarks.push(mark);
+      toast('Page bookmarked');
+      saveMark({ bookmark: mark });
+    }
+    renderMarks();
+    showMarkButton();
+  }
+
+  function removeMark(cfi) {
+    bookmarks = bookmarks.filter(function (b) { return b.cfi !== cfi; });
+    renderMarks();
+    showMarkButton();
+    saveMark({ removeBookmark: cfi });
+  }
+
+  function renderMarks() {
+    var list = $('rd-marks-list');
+    var sorted = bookmarks.slice().sort(function (a, b) { return cfiCompare(a.cfi, b.cfi); });
+    list.innerHTML = '';
+    $('rd-marks-empty').hidden = sorted.length > 0;
+    $('rd-marks-count').textContent = sorted.length ? ' ' + sorted.length : '';
+    sorted.forEach(function (m) {
+      var li = document.createElement('li');
+      var go = document.createElement('button');
+      go.type = 'button';
+      go.className = 'rd-mark-go';
+      var head = document.createElement('span');
+      head.className = 'rd-mark-head';
+      var pct = typeof m.pct === 'number' ? Math.round(m.pct * 100) + '%' : '';
+      head.textContent = (m.label || 'Bookmark') + (pct ? ' · ' + pct : '');
+      go.appendChild(head);
+      if (m.text) {
+        var snip = document.createElement('span');
+        snip.className = 'rd-mark-text';
+        snip.textContent = m.text;
+        go.appendChild(snip);
+      }
+      go.addEventListener('click', function () {
+        closePanels();
+        rendition.display(m.cfi);
+      });
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'rd-mark-del';
+      del.setAttribute('aria-label', 'Remove bookmark' + (m.label ? ': ' + m.label : ''));
+      del.textContent = '×';
+      del.addEventListener('click', function (e) {
+        e.stopPropagation();
+        removeMark(m.cfi);
+        var next = list.querySelector('.rd-mark-del') || $('rd-tab-marks');
+        next.focus();
+      });
+      li.appendChild(go);
+      li.appendChild(del);
+      list.appendChild(li);
+    });
+  }
+
+  var tocTab = 'toc';
+  function showTab(which) {
+    tocTab = which;
+    var marks = which === 'marks';
+    $('rd-tab-toc').setAttribute('aria-selected', String(!marks));
+    $('rd-tab-marks').setAttribute('aria-selected', String(marks));
+    $('rd-tab-toc').tabIndex = marks ? -1 : 0;
+    $('rd-tab-marks').tabIndex = marks ? 0 : -1;
+    $('rd-toc-list').hidden = marks;
+    $('rd-marks').hidden = !marks;
   }
 
   // ---- Panels -----------------------------------------------------------
@@ -279,6 +440,7 @@
     if (t && t.closest && t.closest('button, a, input, select, textarea') && t.ownerDocument === document) {
       if (e.key === ' ' || e.key === 'Enter') { return; }
     }
+    if (e.key === 'b' || e.key === 'B') { e.preventDefault(); toggleMark(); return; }
     if ((e.key === 'f' || e.key === 'F') && canFull) { e.preventDefault(); toggleFull(); return; }
     if (e.key === 'ArrowRight' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey)) { e.preventDefault(); next(); }
     else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || (e.key === ' ' && e.shiftKey)) { e.preventDefault(); prev(); }
@@ -378,6 +540,7 @@
       return rendition.display(start).catch(function () { return rendition.display(); });
     }).then(function () {
       status('');
+      $('rd-mark-btn').disabled = false;
       loadLocations();
     }).catch(function (err) {
       failed(err && err.message ? err.message : 'The book couldn\'t be opened.');
@@ -424,6 +587,17 @@
   $('rd-prev').addEventListener('click', prev);
   $('rd-next').addEventListener('click', next);
   $('rd-toc-btn').addEventListener('click', function () { togglePanel('rd-toc-btn', 'rd-toc'); });
+  $('rd-mark-btn').addEventListener('click', function () { closePanels(); toggleMark(); });
+  $('rd-tab-toc').addEventListener('click', function () { showTab('toc'); });
+  $('rd-tab-marks').addEventListener('click', function () { showTab('marks'); });
+  $('rd-toc').querySelector('.rd-tabs').addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      e.stopPropagation();
+      showTab(tocTab === 'toc' ? 'marks' : 'toc');
+      $(tocTab === 'toc' ? 'rd-tab-toc' : 'rd-tab-marks').focus();
+    }
+  });
   $('rd-set-btn').addEventListener('click', function () { togglePanel('rd-set-btn', 'rd-settings'); });
   Array.prototype.forEach.call(document.querySelectorAll('[data-close]'), function (b) {
     b.addEventListener('click', closePanels);
@@ -447,5 +621,6 @@
 
   syncControls();
   applyLook();
+  renderMarks();
   open();
 })();

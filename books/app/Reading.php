@@ -46,8 +46,9 @@ function read_reading_data(): array
     $d = is_file($f) ? json_decode((string) file_get_contents($f), true) : null;
     $d = is_array($d) ? $d : [];
     return [
-        'settings' => clean_reader_settings(is_array($d['settings'] ?? null) ? $d['settings'] : []),
-        'books'    => is_array($d['books'] ?? null) ? $d['books'] : [],
+        'settings'  => clean_reader_settings(is_array($d['settings'] ?? null) ? $d['settings'] : []),
+        'books'     => is_array($d['books'] ?? null) ? $d['books'] : [],
+        'bookmarks' => is_array($d['bookmarks'] ?? null) ? $d['bookmarks'] : [],
     ];
 }
 
@@ -106,4 +107,30 @@ function recently_opened(int $limit): array
         }
     }
     return $out;
+}
+
+const MAX_BOOKMARKS_PER_BOOK = 300;
+
+/** A position in a book as epub.js writes it, e.g. epubcfi(/6/10!/4/2/1:0). */
+function valid_cfi($cfi): bool
+{
+    return is_string($cfi) && strlen($cfi) <= 600 && preg_match('/^epubcfi\(.+\)$/sD', $cfi) === 1;
+}
+
+/** Plain one-line text of at most $max characters, for labels and snippets. */
+function clean_line($s, int $max): string
+{
+    $s = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', (string) $s) ?? '';
+    $s = trim((string) preg_replace('/\s+/u', ' ', $s));
+    return mb_strlen($s) > $max ? rtrim(mb_substr($s, 0, $max - 1)) . '…' : $s;
+}
+
+/**
+ * Bookmarks for one book, in reading order as saved.
+ * Each: cfi, label (chapter), pct (fraction or null), text (opening words), created.
+ */
+function book_bookmarks(int $bookId): array
+{
+    $list = read_reading_data()['bookmarks'][(string) $bookId] ?? [];
+    return is_array($list) ? array_values(array_filter($list, fn($b) => is_array($b) && valid_cfi($b['cfi'] ?? null))) : [];
 }

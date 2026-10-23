@@ -6,6 +6,9 @@ declare(strict_types=1);
  *
  *   {"id": 1414, "cfi": "epubcfi(...)", "pct": 0.42}   where you stopped
  *   {"settings": {"theme": "sepia", "font": "georgia", "size": 110, "pages": "two"}}
+ *   {"id": 1414, "bookmark": {"cfi": "...", "label": "Chapter 2", "pct": 0.1, "text": "Opening words"}}
+ *   {"id": 1414, "removeBookmark": "epubcfi(...)"}
+ * The two bookmark calls reply with the book's full bookmark list.
  */
 require __DIR__ . '/app/bootstrap.php';
 
@@ -45,9 +48,46 @@ try {
     }
 
     $id = (int) ($in['id'] ?? 0);
+
+    if (isset($in['bookmark']) || isset($in['removeBookmark'])) {
+        if ($id <= 0) {
+            reply(400, ['error' => 'Need a book id']);
+        }
+        $add = is_array($in['bookmark'] ?? null) ? $in['bookmark'] : null;
+        $remove = $in['removeBookmark'] ?? null;
+        if (($add && !valid_cfi($add['cfi'] ?? null)) || (!$add && !valid_cfi($remove))) {
+            reply(400, ['error' => 'Need a position for the bookmark']);
+        }
+        $list = [];
+        update_reading_data(function (array $d) use ($id, $add, $remove, &$list) {
+            $d['bookmarks'] = is_array($d['bookmarks'] ?? null) ? $d['bookmarks'] : [];
+            $list = array_values(array_filter((array) ($d['bookmarks'][(string) $id] ?? []), fn($b) => is_array($b) && valid_cfi($b['cfi'] ?? null)));
+            if ($add) {
+                $list = array_values(array_filter($list, fn($b) => $b['cfi'] !== $add['cfi']));
+                $list[] = [
+                    'cfi'     => (string) $add['cfi'],
+                    'label'   => clean_line($add['label'] ?? '', 120),
+                    'pct'     => isset($add['pct']) && is_numeric($add['pct']) ? max(0.0, min(1.0, (float) $add['pct'])) : null,
+                    'text'    => clean_line($add['text'] ?? '', 160),
+                    'created' => date('c'),
+                ];
+                $list = array_slice($list, -MAX_BOOKMARKS_PER_BOOK);
+            } else {
+                $list = array_values(array_filter($list, fn($b) => $b['cfi'] !== $remove));
+            }
+            if ($list) {
+                $d['bookmarks'][(string) $id] = $list;
+            } else {
+                unset($d['bookmarks'][(string) $id]);
+            }
+            return $d;
+        });
+        reply(200, ['ok' => true, 'bookmarks' => $list]);
+    }
+
     $cfi = (string) ($in['cfi'] ?? '');
     $pct = isset($in['pct']) && is_numeric($in['pct']) ? max(0.0, min(1.0, (float) $in['pct'])) : null;
-    if ($id <= 0 || strlen($cfi) > 600 || !preg_match('/^epubcfi\(.+\)$/s', $cfi)) {
+    if ($id <= 0 || !valid_cfi($cfi)) {
         reply(400, ['error' => 'Need a book id and a position']);
     }
     update_reading_data(function (array $d) use ($id, $cfi, $pct) {
