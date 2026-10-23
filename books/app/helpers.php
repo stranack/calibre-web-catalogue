@@ -185,16 +185,27 @@ function cover_html(array $b, bool $detail = false): string
         . '</span>';
 }
 
-function book_card(array $b): string
+/**
+ * One book on a shelf or in a grid. $href overrides the link (the
+ * "Recently opened" shelf goes straight back into the reader), and $read is
+ * how far through the book you are, shown as a small bar.
+ */
+function book_card(array $b, ?string $href = null, ?float $read = null): string
 {
     $series = '';
     if (!empty($b['series_name'])) {
         $series = '<span class="card-series">' . h($b['series_name']) . ' ' . h(series_number($b['series_index'])) . '</span>';
     }
-    return '<li class="card"><a href="' . h(link_to('book.php', ['id' => (int) $b['id']])) . '">'
+    $progress = '';
+    if ($read !== null) {
+        $pct = max(0, min(100, (int) round($read * 100)));
+        $progress = '<span class="card-progress"><span class="card-meter" aria-hidden="true"><span style="width:' . $pct . '%"></span></span>' . $pct . '% read</span>';
+    }
+    return '<li class="card"><a href="' . h($href ?? link_to('book.php', ['id' => (int) $b['id']])) . '">'
         . '<span class="cover">' . cover_html($b) . '</span>'
         . '<span class="card-title">' . h($b['title']) . '</span>'
         . '<span class="card-author">' . h(author_names($b, 2)) . '</span>'
+        . $progress
         . $series
         . '</a></li>';
 }

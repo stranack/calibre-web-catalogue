@@ -68,6 +68,8 @@ $stats = $cat->stats();
 if (!$filtered) {
     page_top('', ['search' => false, 'class' => 'home']);
     $recent = $cat->recent(18);
+    $opened = is_owner() ? recently_opened(18) : [];
+    $openedBooks = $opened ? $cat->byIds(array_keys($opened)) : [];
     $topSubjects = $cat->topSubjects(16);
     ?>
   <section class="hero">
@@ -80,6 +82,17 @@ if (!$filtered) {
     </form>
   </section>
 
+  <?php if ($openedBooks): ?>
+  <section class="shelf" aria-labelledby="opened-h">
+    <div class="section-head">
+      <h2 id="opened-h">Recently opened</h2>
+    </div>
+    <div class="shelf-track">
+      <ul class="shelf-row"><?php foreach ($openedBooks as $b) echo book_card($b, link_to('read.php', ['id' => (int) $b['id']]), $opened[(int) $b['id']] ?? null); ?></ul>
+    </div>
+  </section>
+
+  <?php endif; ?>
   <section class="shelf" aria-labelledby="recent-h">
     <div class="section-head">
       <h2 id="recent-h">Recently added</h2>

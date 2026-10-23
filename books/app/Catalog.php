@@ -82,6 +82,25 @@ final class Catalog
         return ['total' => $total, 'books' => $books];
     }
 
+    /** Books with these ids, in the order given. Ids no longer in the catalogue are skipped. */
+    public function byIds(array $ids): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($i) => $i > 0)));
+        if (!$ids) {
+            return [];
+        }
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        $st = $this->db->prepare(self::BOOK_COLUMNS . " WHERE b.id IN ($marks)");
+        $st->execute($ids);
+        $books = self::typed($st->fetchAll());
+        $this->attachAuthors($books);
+        $byId = [];
+        foreach ($books as $b) {
+            $byId[(int) $b['id']] = $b;
+        }
+        return array_values(array_filter(array_map(fn($i) => $byId[$i] ?? null, $ids)));
+    }
+
     public function recent(int $limit): array
     {
         $st = $this->db->prepare(self::BOOK_COLUMNS . ' ORDER BY b.timestamp DESC LIMIT :lim');

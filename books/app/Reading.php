@@ -87,3 +87,23 @@ function update_reading_data(callable $change): void
     }
     @chmod(reading_file(), 0600);
 }
+
+/**
+ * Books opened in the reader, most recent first.
+ * @return array<int, ?float> book id => fraction read (null if not yet known)
+ */
+function recently_opened(int $limit): array
+{
+    $books = read_reading_data()['books'];
+    uasort($books, fn($a, $b) => strcmp((string) ($b['updated'] ?? ''), (string) ($a['updated'] ?? '')));
+    $out = [];
+    foreach ($books as $id => $p) {
+        if (is_array($p) && !empty($p['cfi'])) {
+            $out[(int) $id] = isset($p['pct']) && is_numeric($p['pct']) ? (float) $p['pct'] : null;
+        }
+        if (count($out) >= $limit) {
+            break;
+        }
+    }
+    return $out;
+}

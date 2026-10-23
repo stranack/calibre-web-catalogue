@@ -178,6 +178,9 @@ main { max-width: var(--wrap); margin: 0 auto; padding: 0 var(--gutter) 64px; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .card-series { font-size: 0.78rem; }
+.card-progress { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.78rem; line-height: 1.35; margin-top: 2px; }
+.card-meter { flex: 1; max-width: 64px; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; }
+.card-meter span { display: block; height: 100%; background: var(--accent); }
 .card a:hover .card-title { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.15em; }
 .card a:focus-visible { outline-offset: 6px; }
 
