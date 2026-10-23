@@ -37,6 +37,9 @@ body.reader {
   grid-template-rows: auto 1fr auto;
   height: 100vh;
   height: 100dvh;
+  /* Set by reader.js from the real visible height, which in full screen on
+     Android can differ from 100dvh and push the bottom of the page off screen. */
+  height: var(--rd-h, 100dvh);
   overflow: hidden;
   background: var(--bg);
   color: var(--fg);

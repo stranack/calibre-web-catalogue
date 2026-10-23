@@ -541,10 +541,44 @@
     }).then(function () {
       status('');
       $('rd-mark-btn').disabled = false;
+      lastBox = $('rd-viewer').clientWidth + 'x' + $('rd-viewer').clientHeight;
       loadLocations();
     }).catch(function (err) {
       failed(err && err.message ? err.message : 'The book couldn\'t be opened.');
     });
+  }
+
+  // ---- Keeping pages the size of the screen ----------------------------
+
+  // Use the height the browser really shows. 100dvh alone can be taller than
+  // the screen in full screen on Android, which hides the bottom line.
+  function fitHeight() {
+    var h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    if (h > 0) { document.documentElement.style.setProperty('--rd-h', Math.floor(h) + 'px'); }
+  }
+  fitHeight();
+  window.addEventListener('resize', fitHeight);
+  window.addEventListener('orientationchange', function () { setTimeout(fitHeight, 300); });
+  if (window.visualViewport) { window.visualViewport.addEventListener('resize', fitHeight); }
+
+  // Re-lay the pages whenever the reading area changes size, even when the
+  // browser doesn't announce it (toolbars sliding away, full screen settling).
+  var fitTimer = null;
+  var lastBox = '';
+  function refit() {
+    clearTimeout(fitTimer);
+    fitTimer = setTimeout(function () {
+      var v = $('rd-viewer');
+      var box = v.clientWidth + 'x' + v.clientHeight;
+      if (!rendition || !lastLocation || box === lastBox) { return; }
+      lastBox = box;
+      rendition.resize();
+    }, 150);
+  }
+  if (window.ResizeObserver) {
+    new ResizeObserver(refit).observe($('rd-viewer'));
+  } else {
+    window.addEventListener('resize', refit);
   }
 
   // ---- Full screen ------------------------------------------------------
@@ -572,6 +606,8 @@
     $('rd-full-btn').setAttribute('aria-label', on ? 'Leave full screen' : 'Full screen');
     $('rd-full-label').textContent = on ? 'Exit full screen' : 'Full screen';
     root.classList.toggle('is-full', on);
+    fitHeight();
+    [100, 400, 900].forEach(function (ms) { setTimeout(function () { fitHeight(); refit(); }, ms); });
   }
 
   if (canFull) {
