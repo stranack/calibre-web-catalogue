@@ -50,6 +50,25 @@ function set_owner_cookie(bool $on): void
     ]);
 }
 
+/**
+ * A page on this site to come back to after signing in, or null. Only plain
+ * catalogue pages are accepted, so the sign-in can't be used to send someone
+ * to another site.
+ */
+function safe_return_path($p): ?string
+{
+    $p = (string) $p;
+    return preg_match('~^(index|book|browse|read)\.php(\?[^\s<>"\'\\\\]*)?$~D', $p) ? $p : null;
+}
+
+/** This page's address, for the "Sign in" link to return to. */
+function current_return_path(): ?string
+{
+    $page = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+    $qs = (string) ($_SERVER['QUERY_STRING'] ?? '');
+    return safe_return_path($page . ($qs !== '' ? '?' . $qs : ''));
+}
+
 /** Whether book pages should show "open in Dropbox" links to this visitor. */
 function show_dropbox_links(): bool
 {
@@ -385,6 +404,9 @@ function page_top(string $title, array $opts = []): void
       <a href="browse.php?by=authors"<?= $active === 'authors' ? ' aria-current="page"' : '' ?>>Authors</a>
       <a href="browse.php?by=subjects"<?= $active === 'subjects' ? ' aria-current="page"' : '' ?>>Subjects</a>
       <a href="browse.php?by=series"<?= $active === 'series' ? ' aria-current="page"' : '' ?>>Series</a>
+      <?php if (basename((string) ($_SERVER['SCRIPT_NAME'] ?? '')) !== 'admin.php'): ?>
+      <?php if (is_owner()): ?><a class="nav-account" href="admin.php">Admin</a><?php else: ?><a class="nav-account" href="<?= h(link_to('admin.php', ['next' => current_return_path()])) ?>">Sign in</a><?php endif; ?>
+      <?php endif; ?>
     </nav>
   </div>
 </header>

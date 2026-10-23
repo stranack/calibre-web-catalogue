@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             session_regenerate_id(true);
             $_SESSION['admin'] = true;
             set_owner_cookie(true);
-            header('Location: admin.php');
+            header('Location: ' . (safe_return_path($_POST['next'] ?? '') ?? 'admin.php'));
             exit;
         }
         sleep(1);
@@ -101,6 +101,7 @@ page_top('Admin', ['search' => false, 'noindex' => true, 'class' => 'admin']);
     <?php else: ?>
       <form method="post" class="panel login">
         <input type="hidden" name="action" value="login">
+        <?php if ($next = safe_return_path($_GET['next'] ?? $_POST['next'] ?? '')): ?><input type="hidden" name="next" value="<?= h($next) ?>"><?php endif; ?>
         <label for="pw">Admin password</label>
         <input id="pw" type="password" name="password" autocomplete="current-password" required autofocus>
         <button type="submit" class="btn">Sign in</button>
