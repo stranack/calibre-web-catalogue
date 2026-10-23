@@ -11,7 +11,7 @@
     paper: { bg: '#ffffff', fg: '#1f2a29', link: '#1f6a58', force: false },
     sepia: { bg: '#f6eedd', fg: '#3a2e21', link: '#8a4b12', force: true },
     mist:  { bg: '#e7ebe9', fg: '#1f2726', link: '#1f6a58', force: true },
-    night: { bg: '#151a19', fg: '#d6dcd9', link: '#74c4ab', force: true }
+    night: { bg: '#151a19', fg: '#ffffff', link: '#74c4ab', force: true }
   };
   var FONTS = {
     original: null,

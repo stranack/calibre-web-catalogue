@@ -24,7 +24,7 @@
   --accent: #1f6a58; --accent-ink: #ffffff;
 }
 :root[data-reader-theme="night"] {
-  --bg: #151a19; --fg: #d6dcd9; --muted: #97a39f; --chrome: #1d2423; --rule: #2e3836;
+  --bg: #151a19; --fg: #ffffff; --muted: #97a39f; --chrome: #1d2423; --rule: #2e3836;
   --accent: #74c4ab; --accent-ink: #0f1a17; --shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
   color-scheme: dark;
 }
