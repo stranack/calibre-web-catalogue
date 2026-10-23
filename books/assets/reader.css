@@ -65,6 +65,9 @@ button { font: inherit; color: inherit; }
 }
 .rd-back:hover, .rd-tool:hover, .rd-tool[aria-expanded="true"] { background: color-mix(in srgb, var(--fg) 9%, transparent); }
 .rd-aa { font: 600 17px/1 var(--serif); }
+.rd-tool[hidden] { display: none; }
+.rd-icon-exit, .is-full .rd-icon-enter { display: none; }
+.is-full .rd-icon-exit { display: block; }
 .rd-heading { flex: 1; min-width: 0; text-align: center; }
 .rd-title {
   margin: 0; font: 600 15px/1.25 var(--serif);

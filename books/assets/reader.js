@@ -279,6 +279,7 @@
     if (t && t.closest && t.closest('button, a, input, select, textarea') && t.ownerDocument === document) {
       if (e.key === ' ' || e.key === 'Enter') { return; }
     }
+    if ((e.key === 'f' || e.key === 'F') && canFull) { e.preventDefault(); toggleFull(); return; }
     if (e.key === 'ArrowRight' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey)) { e.preventDefault(); next(); }
     else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || (e.key === ' ' && e.shiftKey)) { e.preventDefault(); prev(); }
   }
@@ -381,6 +382,41 @@
     }).catch(function (err) {
       failed(err && err.message ? err.message : 'The book couldn\'t be opened.');
     });
+  }
+
+  // ---- Full screen ------------------------------------------------------
+
+  // Phones' Safari can't put a page in full screen, so the button only
+  // appears where the browser supports it (desktop browsers, Android, iPad).
+  var root = document.documentElement;
+  var canFull = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+
+  function isFull() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+
+  function toggleFull() {
+    if (isFull()) {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    } else {
+      var go = root.requestFullscreen || root.webkitRequestFullscreen;
+      var r = go.call(root);
+      if (r && r.catch) { r.catch(function () { /* refused, e.g. not from a tap */ }); }
+    }
+  }
+
+  function showFull() {
+    var on = isFull();
+    $('rd-full-btn').setAttribute('aria-pressed', String(on));
+    $('rd-full-btn').setAttribute('aria-label', on ? 'Leave full screen' : 'Full screen');
+    $('rd-full-label').textContent = on ? 'Exit full screen' : 'Full screen';
+    root.classList.toggle('is-full', on);
+  }
+
+  if (canFull) {
+    $('rd-full-btn').hidden = false;
+    $('rd-full-btn').addEventListener('click', function () { closePanels(); toggleFull(); });
+    document.addEventListener('fullscreenchange', showFull);
+    document.addEventListener('webkitfullscreenchange', showFull);
+    showFull();
   }
 
   // ---- Controls ---------------------------------------------------------

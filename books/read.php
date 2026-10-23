@@ -82,6 +82,11 @@ $theme = $data['settings']['theme'];
     <span class="rd-aa" aria-hidden="true">Aa</span>
     <span class="rd-tool-label">Display</span>
   </button>
+  <button type="button" class="rd-tool" id="rd-full-btn" aria-pressed="false" hidden>
+    <svg class="rd-icon-enter" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <svg class="rd-icon-exit" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="rd-tool-label" id="rd-full-label">Full screen</span>
+  </button>
 </header>
 
 <div class="rd-stage">
