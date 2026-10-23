@@ -1,0 +1,11 @@
+---
+# Used by cPanel's Git Version Control when GitHub asks it to deploy
+# (see .github/workflows/deploy.yml). Copies the site code in books/ over the
+# live catalogue. Nothing the server made is touched: config.php, data/ and
+# the downloaded covers aren't in the repository, so they are never replaced.
+# The check stops the copy if the folder doesn't already hold the catalogue.
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home3/stranack/public_html/books/
+    - test -f "${DEPLOYPATH}book.php" || { echo "No catalogue at $DEPLOYPATH, nothing copied" >&2; exit 1; }
+    - /bin/cp -R books/. "$DEPLOYPATH"

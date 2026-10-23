@@ -95,6 +95,19 @@ Tags written as `Broad.Narrow`, such as `History.Canada` or `Buddhism.Zen`, are 
 
 When a library has any tags in this form, one-off tags that don't fit the scheme are left off the site (they stay in Calibre). A library with no dotted tags shows every tag, as before.
 
+## Updating the code automatically (optional)
+
+Instead of re-uploading files by hand, GitHub can put changes live whenever the site code in `books/` changes on `main`. The workflow in `.github/workflows/deploy.yml` asks cPanel's **Git Version Control** to pull the latest commit, and `.cpanel.yml` copies `books/` over the live folder. Your `config.php`, the `data` folder and the covers aren't in the repository, so a deploy never replaces them, and the copy stops if the target folder doesn't already contain `book.php`.
+
+One-time setup, if you use your own fork: change the paths in both files to match your account, then:
+
+1. In cPanel, open **Manage API Tokens** and create a token. It can act on your whole cPanel account, so keep it only in GitHub.
+2. In the GitHub repository, open **Settings → Secrets and variables → Actions** and add it as a secret named `BLUEHOST_CPANEL_API_TOKEN`.
+3. In cPanel, open **Git Version Control** and choose **Create**. Clone the repository's URL into the repository path set in the workflow (`REPO_ROOT`).
+4. In GitHub, open **Actions → Deploy to Bluehost → Run workflow** for the first deploy.
+
+Until the secret exists, the workflow just notes that it skipped the deploy.
+
 ## Privacy
 
 Anyone with the address can browse the catalogue. By default the pages ask search engines not to index them; set `allow_search_engines` to `true` to change that.
