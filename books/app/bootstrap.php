@@ -45,3 +45,4 @@ require APP_DIR . '/Catalog.php';
 require APP_DIR . '/Sources.php';
 require APP_DIR . '/SqliteFileReader.php';
 require APP_DIR . '/Sync.php';
+require APP_DIR . '/Reading.php';

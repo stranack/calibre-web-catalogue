@@ -30,6 +30,8 @@ $moreAuthor = $b['authors'][0] ?? null;
 if ($moreAuthor) {
     $more = $cat->moreByAuthor((int) $moreAuthor['id'], (int) $b['id'], 12);
 }
+$canRead = is_owner() && in_array('EPUB', array_map('strtoupper', $b['formats']), true) && $b['path'] !== '';
+$readPos = $canRead ? reading_position((int) $b['id']) : null;
 $inSeries = [];
 if ($b['series']) {
     $r = $cat->search(['series' => (int) $b['series']['id']], 'series', 1, 40);
@@ -51,6 +53,10 @@ page_top($b['title']);
       <?php endif; ?>
       <?php if ($b['rating'] > 0): $stars = (int) round($b['rating'] / 2); ?>
       <p class="book-rating" aria-label="Rated <?= $stars ?> out of 5"><span aria-hidden="true"><?= str_repeat('★', $stars) . str_repeat('☆', 5 - $stars) ?></span></p>
+      <?php endif; ?>
+
+      <?php if ($canRead): ?>
+      <p class="book-read"><a class="btn" href="<?= h(link_to('read.php', ['id' => (int) $b['id']])) ?>"><?= $readPos ? 'Continue reading' : 'Read' ?></a><?php if ($readPos && isset($readPos['pct'])): ?> <span class="book-read-pct"><?= (int) round((float) $readPos['pct'] * 100) ?>% through</span><?php endif; ?></p>
       <?php endif; ?>
 
       <?php if ($description !== ''): ?>
@@ -85,7 +91,8 @@ page_top($b['title']);
           <?php $files = array_values(array_filter($b['files'], fn($x) => stripos((string) $x['format'], 'ORIGINAL_') !== 0)); ?>
           <?php if ($files && is_owner() && $b['path'] !== ''): ?>
           <div><dt>Files</dt><dd class="dropbox-links">
-            <?php foreach ($files as $j => $fl): $fname = $fl['name'] . '.' . strtolower((string) $fl['format']); ?><?= $j ? ' ' : '' ?><a class="file-link" href="<?= h(book_file_url($b, (string) $fl['format'])) ?>" title="Download <?= h($fname) ?> to open in your reading app"><?= h($fl['format']) ?></a><?php endforeach; ?>
+            <?php foreach ($files as $j => $fl): $fname = $fl['name'] . '.' . strtolower((string) $fl['format']); $isEpub = strtoupper((string) $fl['format']) === 'EPUB'; ?><?= $j ? ' ' : '' ?><a class="file-link" href="<?= h($isEpub ? link_to('read.php', ['id' => (int) $b['id']]) : book_file_url($b, (string) $fl['format'])) ?>" title="<?= $isEpub ? 'Read in the browser' : 'Download ' . h($fname) . ' to open in your reading app' ?>"><?= h($fl['format']) ?></a><?php endforeach; ?>
+            <?php if ($canRead): ?><a class="file-dl" href="<?= h(book_file_url($b, 'EPUB')) ?>" title="Download the EPUB to open in an app such as Moon+ Reader">Download EPUB</a><?php endif; ?>
             <?php if (show_dropbox_links()): ?><a class="ext" href="<?= h(dropbox_web_url($b['path'])) ?>" target="_blank" rel="noopener noreferrer">Open the book's folder in Dropbox</a><?php endif; ?>
           </dd></div>
           <?php elseif ($files && show_dropbox_links() && $b['path'] !== ''): ?>

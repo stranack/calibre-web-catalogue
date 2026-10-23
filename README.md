@@ -101,9 +101,17 @@ Anyone with the address can browse the catalogue. By default the pages ask searc
 
 The `app/` and `data/` folders are blocked from the web by `.htaccess`, including the settings file and the Dropbox token. For extra separation, set `data_dir` in `config.php` to a folder outside your web space and reconnect Dropbox.
 
-## Opening books in a reading app
+## Reading in the browser
 
-On a browser where you've signed in to `admin.php` (the browser is remembered for a year), each book page lists the book's formats, such as EPUB or PDF. Tapping one downloads the file through `file.php` with the right file type, so your phone or tablet offers to open it in a reading app such as Moon+ Reader on Android or Books on an iPad. `file.php` checks the sign-in on every request, so other visitors can't download books, whatever the other settings say.
+On a browser where you've signed in to `admin.php` (the browser is remembered for a year), books with an EPUB get a **Read** button, and the EPUB link opens the same reader. It shows one or two pages, with a choice of fonts (the book's own, Literata, Georgia or a sans serif), text size, and a white, sepia, grey or night background. Turn pages with the arrows, the keyboard, a tap near either edge, or a swipe.
+
+The reader saves your place and settings on the site (in `data/reading.json`), so you can stop on the tablet and carry on from the computer. The book page then says **Continue reading** and how far through you are. Other visitors can't open the reader.
+
+The reader uses [epub.js](https://github.com/futurepress/epub.js) and [JSZip](https://github.com/Stuk/jszip), kept in `assets/vendor/` with their licences.
+
+## Downloading to a reading app
+
+The **Download EPUB** link, and the links for other formats such as PDF, download the file through `file.php` with the right file type, so your phone or tablet offers to open it in a reading app such as Moon+ Reader on Android or Books on an iPad. `file.php` checks the sign-in on every request, so other visitors can't download books, whatever the other settings say.
 
 The site fetches each file from Dropbox at the moment you ask for it, using the read-only access it already has. Nothing is copied to the server.
 
