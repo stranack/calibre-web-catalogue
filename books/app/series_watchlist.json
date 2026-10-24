@@ -1,23 +1,102 @@
 {
   "_comment": "Authors whose series metadata was hand-verified. 'book_count' is the count at the time of that review. The sync checks this list: if an author's book count has grown since, it flags the author on the admin page so a human can check whether the new book(s) belong in the series and set the series name/number in Calibre. This file is updated whenever the series metadata for an author is reviewed again.",
-  "_updated": "2026-10-12",
+  "_updated": "2026-10-24",
   "authors": [
-    { "name": "Ken Follett", "series": "Kingsbridge / Century Trilogy", "book_count": 26 },
-    { "name": "Cormac McCarthy", "series": "Border Trilogy", "book_count": 14 },
-    { "name": "Henning Mankell", "series": "Kurt Wallander", "book_count": 12 },
-    { "name": "Kendra Elliot", "series": "Columbia River / Callahan & McLane", "book_count": 10 },
-    { "name": "Ann Cleeves", "series": "Shetland Island", "book_count": 9 },
-    { "name": "Jack Whyte", "series": "A Dream of Eagles", "book_count": 9 },
-    { "name": "Giles Blunt", "series": "John Cardinal", "book_count": 8 },
-    { "name": "Mick Herron", "series": "Slough House", "book_count": 8 },
-    { "name": "David Downing", "series": "John Russell", "book_count": 8 },
-    { "name": "Don Winslow", "series": "Power of the Dog / Danny Ryan", "book_count": 7 },
-    { "name": "Alan Furst", "series": "Night Soldiers", "book_count": 7 },
-    { "name": "R.A. Salvatore", "series": "Dark Elf Trilogy / Companions Codex", "book_count": 6 },
-    { "name": "Richard Osman", "series": "Thursday Murder Club", "book_count": 5 },
-    { "name": "Leonardo Padura", "series": "Mario Conde", "book_count": 5 },
-    { "name": "Philip Pullman", "series": "His Dark Materials", "book_count": 4 },
-    { "name": "Eva Björg Ægisdóttir", "series": "Forbidden Iceland", "book_count": 5 },
-    { "name": "Tana French", "series": "unresolved - see note", "book_count": 5, "note": "In the Woods is tagged Dublin Murder Squad. The Hunter/The Keeper/The Searcher may be the separate Cal Hooper series, but 'The Keeper' doesn't match French's known bibliography - check this title before assuming it belongs to her." }
+    {
+      "name": "Ken Follett",
+      "series": "Kingsbridge / Century Trilogy",
+      "book_count": 26
+    },
+    {
+      "name": "Cormac McCarthy",
+      "series": "Border Trilogy",
+      "book_count": 14
+    },
+    {
+      "name": "Henning Mankell",
+      "series": "Kurt Wallander",
+      "book_count": 12
+    },
+    {
+      "name": "Kendra Elliot",
+      "series": "Columbia River / Callahan & McLane",
+      "book_count": 10
+    },
+    {
+      "name": "Ann Cleeves",
+      "series": "Shetland Island",
+      "book_count": 9
+    },
+    {
+      "name": "Jack Whyte",
+      "series": "A Dream of Eagles",
+      "book_count": 9
+    },
+    {
+      "name": "Giles Blunt",
+      "series": "John Cardinal",
+      "book_count": 8
+    },
+    {
+      "name": "Mick Herron",
+      "series": "Slough House",
+      "book_count": 8
+    },
+    {
+      "name": "David Downing",
+      "series": "John Russell",
+      "book_count": 10
+    },
+    {
+      "name": "Don Winslow",
+      "series": "Power of the Dog / Danny Ryan",
+      "book_count": 7
+    },
+    {
+      "name": "Alan Furst",
+      "series": "Night Soldiers",
+      "book_count": 7
+    },
+    {
+      "name": "R.A. Salvatore",
+      "series": "Dark Elf Trilogy / Companions Codex",
+      "book_count": 6
+    },
+    {
+      "name": "Richard Osman",
+      "series": "Thursday Murder Club",
+      "book_count": 5
+    },
+    {
+      "name": "Leonardo Padura",
+      "series": "Mario Conde",
+      "book_count": 5
+    },
+    {
+      "name": "Philip Pullman",
+      "series": "His Dark Materials",
+      "book_count": 4
+    },
+    {
+      "name": "Eva Björg Ægisdóttir",
+      "series": "Forbidden Iceland",
+      "book_count": 5
+    },
+    {
+      "name": "Tana French",
+      "series": "unresolved - see note",
+      "book_count": 5,
+      "note": "In the Woods is tagged Dublin Murder Squad. The Hunter/The Keeper/The Searcher may be the separate Cal Hooper series, but 'The Keeper' doesn't match French's known bibliography - check this title before assuming it belongs to her."
+    },
+    {
+      "name": "Åsa Larsson",
+      "series": "Rebecka Martinsson",
+      "book_count": 4
+    },
+    {
+      "name": "Asa Larsson",
+      "series": "Rebecka Martinsson",
+      "book_count": 2
+    }
   ]
 }
