@@ -1,5 +1,5 @@
 {
-  "_comment": "The broad subject headings used for Kevin's library's two-level tags (Broad.Narrow, e.g. 'Fiction.Historical'). A book is 'classified' if at least one of its Calibre tags has one of these as its first segment (the part before the first '.') - a flat tag like 'Buddhism' with no narrow counts too. The sync flags any book with NO tag matching this list, since that almost always means it arrived with raw import tags (BISAC codes, publisher boilerplate, character names) instead of a real subject. Add a name here whenever a new broad category is introduced.",
+  "_comment": "The broad subject headings used for the library's two-level tags (Broad.Narrow, e.g. 'Fiction.Historical'). A book is 'classified' if at least one of its Calibre tags has one of these as its first segment (the part before the first '.') - a flat tag like 'Buddhism' with no narrow counts too. The sync flags any book with NO tag matching this list, since that almost always means it arrived with raw import tags (BISAC codes, publisher boilerplate, character names) instead of a real subject. Add a name here whenever a new broad category is introduced.",
   "_updated": "2026-10-12",
   "broads": [
     "Fiction", "History", "Buddhism", "Psychology & Self-Help", "Leadership & Management",

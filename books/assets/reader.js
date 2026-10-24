@@ -1,4 +1,4 @@
-/* Kevin's Library reader: opens an EPUB from file.php with epub.js, applies the
+/* Home Library reader: opens an EPUB from file.php with epub.js, applies the
    chosen pages, font, size and background, and saves your place to the site
    so another device can carry on from it. */
 (function () {
