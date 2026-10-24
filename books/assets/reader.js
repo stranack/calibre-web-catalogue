@@ -8,10 +8,12 @@
 
   // Colours inside the book. The page around it uses the same names in reader.css.
   var THEMES = {
-    paper: { bg: '#ffffff', fg: '#1f2a29', link: '#1f6a58', force: false },
-    sepia: { bg: '#f6eedd', fg: '#3a2e21', link: '#8a4b12', force: true },
-    mist:  { bg: '#e7ebe9', fg: '#1f2726', link: '#1f6a58', force: true },
-    night: { bg: '#151a19', fg: '#ffffff', link: '#74c4ab', force: true }
+    // strip: also clear the book's own background shading, which would clash
+    // with a tinted or dark page. link: the underline colour for links.
+    paper: { bg: '#ffffff', fg: '#1f2a29', link: '#1f6a58', strip: false },
+    sepia: { bg: '#f6eedd', fg: '#3a2e21', link: '#8a4b12', strip: true },
+    mist:  { bg: '#e7ebe9', fg: '#1f2726', link: '#1f6a58', strip: true },
+    night: { bg: '#151a19', fg: '#ffffff', link: '#74c4ab', strip: true }
   };
   var FONTS = {
     original: null,
@@ -58,10 +60,14 @@
     var f = FONTS[settings.font];
     var css = 'html, body { background: ' + t.bg + ' !important; }\n' +
       'body { color: ' + t.fg + ' !important; font-size: ' + settings.size + '% !important; }\n';
-    if (t.force) {
-      // Tinted and dark backgrounds only work if the book's own colours give way.
-      css += 'body * { color: inherit !important; background-color: transparent !important; }\n' +
-        'a, a * { color: ' + t.link + ' !important; }\n';
+    // Every bit of text takes the chosen colour, whatever the book asks for
+    // (class colours, <font color>, text-fill colours). Links keep that colour
+    // too and are marked with an underline instead, so a book that turns whole
+    // paragraphs into links doesn't come out in a different colour.
+    css += 'body *, body *::before, body *::after { color: ' + t.fg + ' !important; -webkit-text-fill-color: ' + t.fg + ' !important; }\n' +
+      'a[href] { text-decoration: underline !important; text-decoration-color: ' + t.link + ' !important; text-decoration-thickness: 1px !important; text-underline-offset: 0.18em; }\n';
+    if (t.strip) {
+      css += 'body * { background-color: transparent !important; }\n';
     }
     if (f) {
       css += 'body, body *:not(code):not(pre):not(kbd):not(samp):not(tt) { font-family: ' + f + ' !important; }\n';
@@ -89,6 +95,14 @@
       doc.head.appendChild(el);
     }
     el.textContent = bookCss();
+    // A colour written on an element with !important beats any stylesheet,
+    // so take those off (only on screen; the book file isn't changed).
+    var strip = (THEMES[settings.theme] || THEMES.paper).strip;
+    Array.prototype.forEach.call(doc.querySelectorAll('[style]'), function (node) {
+      ['color', '-webkit-text-fill-color'].concat(strip ? ['background-color', 'background'] : []).forEach(function (prop) {
+        if (node.style.getPropertyValue(prop)) { node.style.removeProperty(prop); }
+      });
+    });
   }
 
   function applyLook() {
