@@ -121,10 +121,73 @@
     return ['auto', MIN_SPREAD];
   }
 
+  /**
+   * A position for the first full line of text on screen. Re-laying the pages
+   * from the reader's own "start of page" marker can land a page or two
+   * early, so re-layouts aim at the words you can actually see instead.
+   */
+  function findAnchor() {
+    try {
+      var v = $('rd-viewer');
+      var fr = v.querySelector('iframe');
+      var doc = fr.contentDocument;
+      var contents = rendition.getContents()[0];
+      var vr = v.getBoundingClientRect();
+      var fb = fr.getBoundingClientRect();
+      var walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+      var node;
+      while ((node = walker.nextNode())) {
+        if (!node.textContent.trim()) { continue; }
+        var range = doc.createRange();
+        range.selectNodeContents(node);
+        var rects = range.getClientRects();
+        for (var i = 0; i < rects.length; i++) {
+          var b = rects[i];
+          var x = fb.left + b.left + 1;
+          if (b.width > 1 && x >= vr.left && x < vr.right && fb.top + b.top >= vr.top - 1 && fb.top + b.bottom <= vr.bottom + 1) {
+            // Aim a little way into the line: a spot at the very start of a
+            // line is measured as the end of the line before, which can be
+            // on the previous page.
+            var at = doc.caretRangeFromPoint ? doc.caretRangeFromPoint(b.left + Math.min(b.width / 2, 40), b.top + b.height / 2) : null;
+            if (!at || at.startContainer.nodeType !== 3) {
+              at = doc.createRange();
+              var off = 0;
+              while (off < node.length - 1 && /\s/.test(node.textContent.charAt(off))) { off++; }
+              at.setStart(node, Math.min(off + 3, node.length));
+              at.collapse(true);
+            }
+            return contents.cfiFromRange(at);
+          }
+        }
+      }
+    } catch (e) { /* fall back below */ }
+    return lastLocation && lastLocation.start ? lastLocation.start.cfi : null;
+  }
+
+  // The spot you're reading, noted after each page turn or jump you make,
+  // and kept through any number of re-layouts (text size steps, full screen,
+  // repairs) until you move on. Re-anchoring after every re-layout would
+  // creep backwards, because the re-laid page usually starts a little earlier.
+  var readingAnchor = null;
+  var noteNextPage = true;
+  function userMoved() { noteNextPage = true; readingAnchor = null; }
+  function anchorCfi() {
+    if (!readingAnchor) { readingAnchor = findAnchor(); }
+    return readingAnchor;
+  }
+  /** Go back to the reading spot once a re-layout epub.js has started is done. */
+  function returnTo(spot) {
+    if (!spot) { return; }
+    var done = false;
+    function go() { if (!done) { done = true; rendition.display(spot); } }
+    rendition.once('relocated', function () { setTimeout(go, 60); });
+    setTimeout(go, 500);
+  }
+
   /** Re-lay the book after a change that alters how much fits on a page. */
-  function relayout() {
+  function relayout(anchor) {
     if (!rendition) { return; }
-    var cfi = lastLocation && lastLocation.start ? lastLocation.start.cfi : null;
+    var cfi = anchor || anchorCfi();
     var s = spreadArgs();
     rendition.spread(s[0], s[1]);
     rendition.resize();
@@ -220,6 +283,7 @@
         b.dataset.href = it.href;
         b.addEventListener('click', function () {
           closePanels();
+          userMoved();
           rendition.display(it.href);
         });
         li.appendChild(b);
@@ -370,6 +434,7 @@
       }
       go.addEventListener('click', function () {
         closePanels();
+        userMoved();
         rendition.display(m.cfi);
       });
       var del = document.createElement('button');
@@ -434,17 +499,19 @@
 
   function change(key, value) {
     if (settings[key] === value) { return; }
+    // Note the words on screen before the text changes size or shape.
+    var anchor = key !== 'theme' && rendition ? anchorCfi() : null;  // before the text changes
     settings[key] = value;
     syncControls();
     applyLook();
-    if (key !== 'theme') { relayout(); }
+    if (key !== 'theme') { relayout(anchor); }
     saveSettings();
   }
 
   // ---- Turning pages ----------------------------------------------------
 
-  function next() { if (rendition) { rendition.next(); } }
-  function prev() { if (rendition) { rendition.prev(); } }
+  function next() { if (rendition) { userMoved(); rendition.next(); } }
+  function prev() { if (rendition) { userMoved(); rendition.prev(); } }
 
   function onKey(e) {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) { return; }
@@ -542,11 +609,17 @@
         contents.addStylesheet(FONT_CSS);
         styleContents(contents);
         wireInput(contents);
+
       });
       rendition.on('relocated', function (loc) {
         lastLocation = loc;
         showWhere(loc);
         savePosition(loc);
+        checkFit();
+        if (noteNextPage) {
+          noteNextPage = false;
+          setTimeout(function () { if (!readingAnchor) { readingAnchor = findAnchor(); } }, 80);
+        }
       });
       book.loaded.navigation.then(function (nav) { buildToc(nav.toc); });
 
@@ -584,11 +657,56 @@
     fitTimer = setTimeout(function () {
       var v = $('rd-viewer');
       var box = v.clientWidth + 'x' + v.clientHeight;
-      if (!rendition || !lastLocation || box === lastBox) { return; }
+      if (!rendition || !lastLocation) { return; }
+      if (box === lastBox) { checkFit(); return; }
       lastBox = box;
-      rendition.resize();
+      var spot = anchorCfi();
+      rendition.resize(undefined, undefined, spot);
+      returnTo(spot);
+      checkFit();
     }, 150);
   }
+  // After each page turn and layout change, check the page still fits the
+  // reading area exactly: the book's frame the same height as the area, not
+  // shifted, and not scrolled up or down. Tablets can leave it off by a line
+  // (full screen settling, fonts arriving late), which hides the top or
+  // bottom line; when that happens, lay the pages out again at the same spot.
+  var healing = false;
+  function frameOff() {
+    var v = $('rd-viewer');
+    var fr = v.querySelector('iframe');
+    if (!fr || !fr.contentDocument) { return false; }
+    var doc = fr.contentDocument;
+    var se = doc.scrollingElement || doc.documentElement;
+    var scrolled = !!(se.scrollTop || (doc.body && doc.body.scrollTop));
+    if (se.scrollTop) { se.scrollTop = 0; }
+    if (doc.body && doc.body.scrollTop) { doc.body.scrollTop = 0; }
+    var vr = v.getBoundingClientRect();
+    var fb = fr.getBoundingClientRect();
+    return scrolled || Math.abs(fb.height - v.clientHeight) > 1 || Math.abs(fb.top - vr.top) > 1;
+  }
+  var heals = [];
+  function forceRelayout() {
+    if (!rendition || !lastLocation || !lastLocation.start || healing) { return; }
+    // Never loop: at most three attempts in any ten seconds.
+    var t = Date.now();
+    heals = heals.filter(function (x) { return t - x < 10000; });
+    if (heals.length >= 3) { return; }
+    heals.push(t);
+    healing = true;
+    if (rendition.manager) { rendition.manager._stageSize = undefined; }
+    lastBox = $('rd-viewer').clientWidth + 'x' + $('rd-viewer').clientHeight;
+    var spot = anchorCfi();
+    rendition.resize(undefined, undefined, spot);
+    returnTo(spot);
+    setTimeout(function () { healing = false; }, 900);
+  }
+  var checkTimer = null;
+  function checkFit() {
+    clearTimeout(checkTimer);
+    checkTimer = setTimeout(function () { if (frameOff()) { forceRelayout(); } }, 250);
+  }
+
   if (window.ResizeObserver) {
     new ResizeObserver(refit).observe($('rd-viewer'));
   } else {
