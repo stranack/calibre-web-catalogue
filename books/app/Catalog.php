@@ -262,6 +262,17 @@ final class Catalog
                     OR EXISTS (SELECT 1 FROM books_publishers_link x JOIN publishers p ON p.id = x.publisher WHERE x.book = b.id AND p.name $like))";
             }
         }
+        // Read / not yet read (the owner's list of finished books, passed in as ids)
+        if (isset($f['only_ids']) && is_array($f['only_ids'])) {
+            $ids = array_values(array_filter(array_map('intval', $f['only_ids']), fn($i) => $i > 0));
+            $c[] = $ids ? 'b.id IN (' . implode(',', $ids) . ')' : '0';
+        }
+        if (!empty($f['not_ids']) && is_array($f['not_ids'])) {
+            $ids = array_values(array_filter(array_map('intval', $f['not_ids']), fn($i) => $i > 0));
+            if ($ids) {
+                $c[] = 'b.id NOT IN (' . implode(',', $ids) . ')';
+            }
+        }
         return $c ? 'WHERE ' . implode(' AND ', $c) : '';
     }
 

@@ -48,6 +48,7 @@ $config = [
     'settings' => $data['settings'],
     'position' => reading_position((int) $b['id']),
     'bookmarks' => book_bookmarks((int) $b['id']),
+    'finished' => isset(finished_books()[(int) $b['id']]),
 ];
 $v = fn(string $f) => h((string) @filemtime(APP_ROOT . '/' . $f));
 $theme = $data['settings']['theme'];

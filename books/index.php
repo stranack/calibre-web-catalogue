@@ -18,7 +18,16 @@ $f = [
 ];
 $f['q'] = mb_substr($f['q'], 0, 200);
 $f['subject'] = mb_substr($f['subject'], 0, 100);
-$filtered = $f['q'] !== '' || $f['author'] || $f['tag'] || $f['series'] || $f['publisher'] || $f['subject'] !== '';
+$f['read'] = is_owner() && in_array($_GET['read'] ?? '', ['yes', 'no'], true) ? (string) $_GET['read'] : '';
+$filtered = $f['q'] !== '' || $f['author'] || $f['tag'] || $f['series'] || $f['publisher'] || $f['subject'] !== '' || $f['read'] !== '';
+
+// What the catalogue is asked for: the filters, plus the owner's read list when filtering by it.
+$fq = $f;
+if ($f['read'] === 'yes') {
+    $fq['only_ids'] = array_keys(finished_books());
+} elseif ($f['read'] === 'no') {
+    $fq['not_ids'] = array_keys(finished_books());
+}
 
 $sorts = ['title' => 'Title', 'author' => 'Author', 'added' => 'Recently added', 'published' => 'Newest published'];
 if ($f['q'] !== '') {
@@ -34,7 +43,7 @@ if (!isset($sorts[$sort])) {
 $page = max(1, (int) ($_GET['page'] ?? 1));
 $per = max(12, min(120, (int) cfg('per_page', 48)));
 
-$result = $cat->search($f, $sort, $page, $per);
+$result = $cat->search($fq, $sort, $page, $per);
 $params = $f + ['sort' => $sort];
 $linkFor = fn(int $p) => link_to('index.php', $params + ['page' => $p]);
 
@@ -51,6 +60,9 @@ foreach ($labels as $k => $label) {
         $name = $cat->nameOf($k, $f[$k]) ?? 'Unknown';
         $chips[] = ['label' => $label, 'name' => $name, 'href' => link_to('index.php', array_merge($params, [$k => 0]))];
     }
+}
+if ($f['read'] !== '') {
+    $chips[] = ['label' => 'Reading', 'name' => $f['read'] === 'yes' ? 'Books you\'ve read' : 'Not read yet', 'href' => link_to('index.php', array_merge($params, ['read' => '']))];
 }
 if ($f['q'] !== '') {
     $heading = 'Results for “' . $f['q'] . '”';
@@ -70,6 +82,7 @@ if (!$filtered) {
     $recent = $cat->recent(18);
     $opened = is_owner() ? recently_opened(18) : [];
     $openedBooks = $opened ? $cat->byIds(array_keys($opened)) : [];
+    $finishedCount = is_owner() ? count(finished_books()) : 0;
     $topSubjects = $cat->topSubjects(16);
     ?>
   <section class="hero">
@@ -82,14 +95,19 @@ if (!$filtered) {
     </form>
   </section>
 
-  <?php if ($openedBooks): ?>
+  <?php if ($openedBooks || $finishedCount): ?>
   <section class="shelf" aria-labelledby="opened-h">
     <div class="section-head">
       <h2 id="opened-h">Recently opened</h2>
+      <?php if ($finishedCount): ?><a href="<?= h(link_to('index.php', ['read' => 'yes'])) ?>">Books you've read (<?= number_format($finishedCount) ?>)</a><?php endif; ?>
     </div>
+    <?php if ($openedBooks): ?>
     <div class="shelf-track">
       <ul class="shelf-row"><?php foreach ($openedBooks as $b) echo book_card($b, link_to('read.php', ['id' => (int) $b['id']]), $opened[(int) $b['id']] ?? null); ?></ul>
     </div>
+    <?php else: ?>
+    <p class="shelf-empty">Nothing in progress. Open a book's EPUB to start reading.</p>
+    <?php endif; ?>
   </section>
 
   <?php endif; ?>
@@ -120,6 +138,7 @@ if (!$filtered) {
   <section class="results" aria-labelledby="all-h">
     <div class="section-head">
       <h2 id="all-h">All books</h2>
+      <?php read_toggle($params, ''); ?>
       <?php sort_form($sorts, $sort, $f); ?>
     </div>
     <ul class="grid"><?php foreach ($result['books'] as $b) echo book_card($b); ?></ul>
@@ -131,7 +150,7 @@ if (!$filtered) {
 }
 
 // Filtered or searched view
-$refine = $cat->subjectsWithin($f, 14);
+$refine = $cat->subjectsWithin($fq, 14);
 $refine = array_values(array_filter($refine, fn($t) => $t['n'] < $result['total']));
 
 page_top($f['q'] !== '' ? 'Search: ' . $f['q'] : $heading, ['q' => $f['q']]);
@@ -168,6 +187,7 @@ page_top($f['q'] !== '' ? 'Search: ' . $f['q'] : $heading, ['q' => $f['q']]);
           </ul>
         </div>
         <?php endif; ?>
+        <?php read_toggle($params, $f['read']); ?>
         <?php sort_form($sorts, $sort, $f); ?>
       </div>
       <ul class="grid"><?php foreach ($result['books'] as $b) echo book_card($b); ?></ul>
@@ -193,4 +213,21 @@ function sort_form(array $sorts, string $sort, array $f): void
       <noscript><button type="submit">Sort</button></noscript>
     </form>
     <?php
+}
+
+/** Owner only: show all books, only the ones you've read, or only the unread ones. */
+function read_toggle(array $params, string $current): void
+{
+    if (!is_owner()) {
+        return;
+    }
+    $opts = ['' => 'All', 'yes' => 'Read', 'no' => 'Not read'];
+    echo '<nav class="read-toggle" aria-label="Show books by whether you\'ve read them">';
+    foreach ($opts as $k => $label) {
+        $href = link_to('index.php', array_merge($params, ['read' => $k, 'page' => 1]));
+        echo $k === $current
+            ? '<span class="rt-on" aria-current="true">' . h($label) . '</span>'
+            : '<a href="' . h($href) . '">' . h($label) . '</a>';
+    }
+    echo '</nav>';
 }

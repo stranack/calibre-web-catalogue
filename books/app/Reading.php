@@ -49,6 +49,7 @@ function read_reading_data(): array
         'settings'  => clean_reader_settings(is_array($d['settings'] ?? null) ? $d['settings'] : []),
         'books'     => is_array($d['books'] ?? null) ? $d['books'] : [],
         'bookmarks' => is_array($d['bookmarks'] ?? null) ? $d['bookmarks'] : [],
+        'finished'  => is_array($d['finished'] ?? null) ? $d['finished'] : [],
     ];
 }
 
@@ -77,6 +78,7 @@ function update_reading_data(callable $change): void
         $d = is_array($d) ? $d : [];
         $d['settings'] = clean_reader_settings(is_array($d['settings'] ?? null) ? $d['settings'] : []);
         $d['books'] = is_array($d['books'] ?? null) ? $d['books'] : [];
+        $d['finished'] = is_array($d['finished'] ?? null) ? $d['finished'] : [];
         $d = $change($d);
         ftruncate($fh, 0);
         rewind($fh);
@@ -95,7 +97,8 @@ function update_reading_data(callable $change): void
  */
 function recently_opened(int $limit): array
 {
-    $books = read_reading_data()['books'];
+    $data = read_reading_data();
+    $books = array_diff_key($data['books'], $data['finished']);
     uasort($books, fn($a, $b) => strcmp((string) ($b['updated'] ?? ''), (string) ($a['updated'] ?? '')));
     $out = [];
     foreach ($books as $id => $p) {
@@ -133,4 +136,38 @@ function book_bookmarks(int $bookId): array
 {
     $list = read_reading_data()['bookmarks'][(string) $bookId] ?? [];
     return is_array($list) ? array_values(array_filter($list, fn($b) => is_array($b) && valid_cfi($b['cfi'] ?? null))) : [];
+}
+
+/**
+ * Books marked as read, newest first.
+ * @return array<int, string> book id => date marked (ISO 8601)
+ */
+function finished_books(): array
+{
+    static $cache = null;
+    if ($cache === null) {
+        $cache = [];
+        foreach (read_reading_data()['finished'] as $id => $f) {
+            if ((int) $id > 0) {
+                $cache[(int) $id] = is_array($f) ? (string) ($f['at'] ?? '') : '';
+            }
+        }
+        arsort($cache);
+    }
+    return $cache;
+}
+
+/** Mark a book as read (or not). $how is 'end' when the reader got to the last page, 'manual' for the button. */
+function set_finished(int $bookId, bool $done, string $how = 'manual'): void
+{
+    update_reading_data(function (array $d) use ($bookId, $done, $how) {
+        if ($done) {
+            if (!isset($d['finished'][(string) $bookId])) {
+                $d['finished'][(string) $bookId] = ['at' => date('c'), 'how' => $how === 'end' ? 'end' : 'manual'];
+            }
+        } else {
+            unset($d['finished'][(string) $bookId]);
+        }
+        return $d;
+    });
 }

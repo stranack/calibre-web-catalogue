@@ -224,6 +224,15 @@
     post(body, keepalive);
   }
 
+  // Reaching the last page marks the book as read (once; the book page can undo it).
+  function noteFinished(loc) {
+    if (cfg.finished || !loc || !loc.atEnd) { return; }
+    cfg.finished = true;
+    flushPosition();
+    post({ id: cfg.id, finished: true, how: 'end' });
+    toast('Finished \u2014 marked as read');
+  }
+
   var settingsTimer = null;
   function saveSettings() {
     clearTimeout(settingsTimer);
@@ -615,6 +624,7 @@
         lastLocation = loc;
         showWhere(loc);
         savePosition(loc);
+        noteFinished(loc);
         checkFit();
         if (noteNextPage) {
           noteNextPage = false;

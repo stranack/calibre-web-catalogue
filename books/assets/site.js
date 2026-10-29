@@ -34,6 +34,29 @@
     el.insertAdjacentElement('afterend', btn);
   });
 
+  // Book page (owner): mark a book as read or unread.
+  document.querySelectorAll('[data-read-toggle]').forEach(function (box) {
+    var btn = box.querySelector('button');
+    if (!btn || !window.fetch) return;
+    btn.hidden = false;
+    btn.addEventListener('click', function () {
+      var done = box.getAttribute('data-done') === '1';
+      btn.disabled = true;
+      fetch('reading.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-Library-Reader': '1' },
+        body: JSON.stringify({ id: parseInt(box.getAttribute('data-id'), 10), finished: !done, how: 'manual' })
+      }).then(function (r) {
+        if (!r.ok) throw new Error('save failed');
+        location.reload();
+      }).catch(function () {
+        btn.disabled = false;
+        btn.textContent = 'Couldn\u2019t save \u2014 try again';
+      });
+    });
+  });
+
   // Admin: keep a multi-step sync going until every cover is in.
   var cont = document.querySelector('form[data-autocontinue]');
   if (cont) {

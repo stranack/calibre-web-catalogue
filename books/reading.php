@@ -8,6 +8,7 @@ declare(strict_types=1);
  *   {"settings": {"theme": "sepia", "font": "georgia", "size": 110, "pages": "two"}}
  *   {"id": 1414, "bookmark": {"cfi": "...", "label": "Chapter 2", "pct": 0.1, "text": "Opening words"}}
  *   {"id": 1414, "removeBookmark": "epubcfi(...)"}
+ *   {"id": 1414, "finished": true, "how": "end"}       mark as read (false to undo)
  * The two bookmark calls reply with the book's full bookmark list.
  */
 require __DIR__ . '/app/bootstrap.php';
@@ -48,6 +49,14 @@ try {
     }
 
     $id = (int) ($in['id'] ?? 0);
+
+    if (array_key_exists('finished', $in)) {
+        if ($id <= 0) {
+            reply(400, ['error' => 'Need a book id']);
+        }
+        set_finished($id, (bool) $in['finished'], (string) ($in['how'] ?? 'manual'));
+        reply(200, ['ok' => true, 'finished' => (bool) $in['finished']]);
+    }
 
     if (isset($in['bookmark']) || isset($in['removeBookmark'])) {
         if ($id <= 0) {

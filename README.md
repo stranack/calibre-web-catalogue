@@ -120,6 +120,8 @@ On a browser where you've signed in to `admin.php` (the browser is remembered fo
 
 **Bookmark** in the reader's top bar (or the B key) marks the page you're on, and the **Bookmarks** tab beside Contents lists them with the chapter, how far through the book, and the page's opening words. **Full screen** (or the F key) hides the browser's toolbars where the browser allows it.
 
+Turning to the last page of a book marks it as **read**. The book page then shows a Read badge with the date, and a **Mark as read / Mark as unread** link for books you finished somewhere else (or to undo it). Read books get a ✓ Read line under their cover, drop out of **Recently opened**, and the **All / Read / Not read** switch above the book lists (or **Books you've read** on the home page) filters by it. Only you see any of this, and it is stored with your reading positions, not in Calibre.
+
 The reader saves your place, bookmarks and settings on the site (in `data/reading.json`), so you can stop on the tablet and carry on from the computer. The book page then says **Continue reading** and how far through you are. Other visitors can't open the reader.
 
 The reader uses [epub.js](https://github.com/futurepress/epub.js) and [JSZip](https://github.com/Stuk/jszip), kept in `assets/vendor/` with their licences.

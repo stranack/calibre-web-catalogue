@@ -201,13 +201,22 @@ function book_card(array $b, ?string $href = null, ?float $read = null): string
         $pct = max(0, min(100, (int) round($read * 100)));
         $progress = '<span class="card-progress"><span class="card-meter" aria-hidden="true"><span style="width:' . $pct . '%"></span></span>' . $pct . '% read</span>';
     }
-    return '<li class="card"><a href="' . h($href ?? link_to('book.php', ['id' => (int) $b['id']])) . '">'
+    $done = is_owner() && isset(finished_books()[(int) $b['id']]);
+    if ($done) {
+        $progress = '<span class="card-progress card-done">' . check_icon() . 'Read</span>';
+    }
+    return '<li class="card' . ($done ? ' is-read' : '') . '"><a href="' . h($href ?? link_to('book.php', ['id' => (int) $b['id']])) . '">'
         . '<span class="cover">' . cover_html($b) . '</span>'
         . '<span class="card-title">' . h($b['title']) . '</span>'
         . '<span class="card-author">' . h(author_names($b, 2)) . '</span>'
         . $progress
         . $series
         . '</a></li>';
+}
+
+function check_icon(): string
+{
+    return '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 }
 
 function series_number($idx): string
