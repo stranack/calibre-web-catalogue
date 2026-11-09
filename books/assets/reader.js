@@ -170,7 +170,8 @@
   // creep backwards, because the re-laid page usually starts a little earlier.
   var readingAnchor = null;
   var noteNextPage = true;
-  function userMoved() { noteNextPage = true; readingAnchor = null; }
+  var movedSinceOpen = false;
+  function userMoved() { noteNextPage = true; readingAnchor = null; movedSinceOpen = true; }
   function anchorCfi() {
     if (!readingAnchor) { readingAnchor = findAnchor(); }
     return readingAnchor;
@@ -193,6 +194,20 @@
     rendition.resize();
     if (cfi) {
       rendition.display(cfi);
+    }
+  }
+
+  /**
+   * Jump to a place in the book. A book re-made in Calibre can leave an old
+   * bookmark or contents entry pointing at a spot that no longer exists, and
+   * epub.js answers that with a rejected promise; say so rather than looking
+   * like the tap did nothing.
+   */
+  function goTo(spot, what) {
+    if (!rendition || !spot) { return; }
+    var r = rendition.display(spot);
+    if (r && r.catch) {
+      r.catch(function () { toast('That ' + what + ' doesn\'t point anywhere in this book any more.'); });
     }
   }
 
@@ -245,7 +260,15 @@
     if (book && book.locations && book.locations.length() > 0 && loc && loc.start) {
       return book.locations.percentageFromCfi(loc.start.cfi);
     }
-    return cfg.position && typeof cfg.position.pct === 'number' ? cfg.position.pct : null;
+    // Counting the pages takes a moment after the book opens. Until it's
+    // done the only percentage we can stand behind is the one saved with the
+    // place we opened at, and only while we're still sitting on it; guessing
+    // with it after a page turn would save that old figure against the new
+    // position and leave the shelf showing a number that never moved.
+    if (!movedSinceOpen && cfg.position && typeof cfg.position.pct === 'number') {
+      return cfg.position.pct;
+    }
+    return null;
   }
 
   function chapterLabel(href) {
@@ -266,7 +289,7 @@
   function showWhere(loc) {
     var pct = percentFor(loc);
     $('rd-chapter').textContent = chapterLabel(loc && loc.start ? loc.start.href : '');
-    $('rd-where').textContent = pct === null ? '' : Math.round(pct * 100) + '%';
+    $('rd-where').textContent = pct !== null ? Math.round(pct * 100) + '%' : (countsFailed ? 'Progress unavailable' : '');
     $('rd-progress-fill').style.width = pct === null ? '0' : (pct * 100).toFixed(1) + '%';
     $('rd-prev').disabled = !!loc.atStart;
     $('rd-next').disabled = !!loc.atEnd;
@@ -293,7 +316,7 @@
         b.addEventListener('click', function () {
           closePanels();
           userMoved();
-          rendition.display(it.href);
+          goTo(it.href, 'chapter');
         });
         li.appendChild(b);
         if (it.subitems && it.subitems.length) {
@@ -444,7 +467,7 @@
       go.addEventListener('click', function () {
         closePanels();
         userMoved();
-        rendition.display(m.cfi);
+        goTo(m.cfi, 'bookmark');
       });
       var del = document.createElement('button');
       del.type = 'button';
@@ -573,6 +596,7 @@
 
   // ---- Progress percentages ---------------------------------------------
 
+  var countsFailed = false;
   function locationsKey() { return 'kl-locations-' + cfg.id + '-' + cfg.version; }
 
   function loadLocations() {
@@ -585,6 +609,11 @@
     setTimeout(function () {
       book.locations.generate(1200).then(function () {
         try { localStorage.setItem(locationsKey(), book.locations.save()); } catch (e) { /* storage full or blocked */ }
+        refreshWhere();
+      }).catch(function () {
+        // No page counts: the bar stays empty and the percentage can't be
+        // worked out. The place you're at still saves.
+        countsFailed = true;
         refreshWhere();
       });
     }, 300);

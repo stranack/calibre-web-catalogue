@@ -40,10 +40,33 @@ function clean_reader_settings(array $in): array
     return $s;
 }
 
-function read_reading_data(): array
+/**
+ * The file's raw contents, read under a shared lock so a read can't land in
+ * the middle of a write and come back as half a file.
+ */
+function read_reading_raw(): string
 {
     $f = reading_file();
-    $d = is_file($f) ? json_decode((string) file_get_contents($f), true) : null;
+    if (!is_file($f)) {
+        return '';
+    }
+    $fh = @fopen($f, 'r');
+    if (!$fh) {
+        return '';
+    }
+    try {
+        flock($fh, LOCK_SH);
+        $raw = (string) stream_get_contents($fh);
+        flock($fh, LOCK_UN);
+    } finally {
+        fclose($fh);
+    }
+    return $raw;
+}
+
+function read_reading_data(): array
+{
+    $d = json_decode(read_reading_raw(), true);
     $d = is_array($d) ? $d : [];
     return [
         'settings'  => clean_reader_settings(is_array($d['settings'] ?? null) ? $d['settings'] : []),
