@@ -444,7 +444,10 @@
 
   function renderMarks() {
     var list = $('rd-marks-list');
-    var sorted = bookmarks.slice().sort(function (a, b) { return cfiCompare(a.cfi, b.cfi); });
+    // Furthest into the book first, so the place you most recently
+    // bookmarked is at the top of the list rather than buried under the
+    // early ones.
+    var sorted = bookmarks.slice().sort(function (a, b) { return cfiCompare(b.cfi, a.cfi); });
     list.innerHTML = '';
     $('rd-marks-empty').hidden = sorted.length > 0;
     $('rd-marks-count').textContent = sorted.length ? ' ' + sorted.length : '';
