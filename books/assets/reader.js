@@ -835,8 +835,42 @@
 
   // ---- Turning pages ----------------------------------------------------
 
-  function next(why) { if (rendition) { dbg('turn next (' + (why || '?') + ')'); dbgWrap(); userMoved(); rendition.next(); } }
-  function prev(why) { if (rendition) { dbg('turn prev (' + (why || '?') + ')'); dbgWrap(); userMoved(); rendition.prev(); } }
+  function next(why) { if (rendition) { dbg('turn next (' + (why || '?') + ')'); dbgWrap(); steadyScroll(); userMoved(); rendition.next(); } }
+  function prev(why) { if (rendition) { dbg('turn prev (' + (why || '?') + ')'); dbgWrap(); steadyScroll(); userMoved(); rendition.prev(); } }
+
+  /**
+   * epub.js decides whether a chapter has another spread with plain
+   * arithmetic on the scroll position: position + width + one spread must
+   * not pass the chapter's full width. On a screen whose pixel ratio isn't a
+   * whole number (2.125 on the tablet), the browser can only stop a scroll on
+   * a whole screen pixel, so a turn to 7236 reads back as 7236.235. On the
+   * second-last spread that quarter pixel tips the sum past the end, and the
+   * turn goes to the next chapter instead of the last spread.
+   *
+   * Spreads always start on a multiple of the spread width, so a reading
+   * within a pixel of one is that spread, rounded by the screen. Reading it
+   * back as the exact multiple puts epub.js's sum where it belongs; anything
+   * further off is left as it is.
+   */
+  function steadyScroll() {
+    var c = document.querySelector('#rd-viewer .epub-container');
+    if (!c || c.__steady) { return; }
+    var desc = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollLeft');
+    if (!desc || !desc.get || !desc.set) { return; }
+    c.__steady = true;
+    Object.defineProperty(c, 'scrollLeft', {
+      configurable: true,
+      get: function () {
+        var v = desc.get.call(this);
+        var lay = rendition && rendition.manager && rendition.manager.layout;
+        var d = lay && lay.delta;
+        if (!d) { return v; }
+        var k = Math.round(v / d);
+        return Math.abs(v - k * d) < 1 ? k * d : v;
+      },
+      set: function (v) { desc.set.call(this, v); }
+    });
+  }
 
   /** Log the numbers epub.js weighs each time it decides where a turn goes. */
   function dbgWrap() {
@@ -1059,6 +1093,7 @@
     }).then(function () {
       status('');
       $('rd-mark-btn').disabled = false;
+      steadyScroll();
       lastBox = $('rd-viewer').clientWidth + 'x' + $('rd-viewer').clientHeight;
       drawAllNotes();
       renderNotes();
