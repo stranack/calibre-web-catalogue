@@ -72,6 +72,7 @@ function read_reading_data(): array
         'settings'  => clean_reader_settings(is_array($d['settings'] ?? null) ? $d['settings'] : []),
         'books'     => is_array($d['books'] ?? null) ? $d['books'] : [],
         'bookmarks' => is_array($d['bookmarks'] ?? null) ? $d['bookmarks'] : [],
+        'notes'     => is_array($d['notes'] ?? null) ? $d['notes'] : [],
         'finished'  => is_array($d['finished'] ?? null) ? $d['finished'] : [],
     ];
 }
@@ -101,6 +102,7 @@ function update_reading_data(callable $change): void
         $d = is_array($d) ? $d : [];
         $d['settings'] = clean_reader_settings(is_array($d['settings'] ?? null) ? $d['settings'] : []);
         $d['books'] = is_array($d['books'] ?? null) ? $d['books'] : [];
+        $d['notes'] = is_array($d['notes'] ?? null) ? $d['notes'] : [];
         $d['finished'] = is_array($d['finished'] ?? null) ? $d['finished'] : [];
         $d = $change($d);
         ftruncate($fh, 0);
@@ -159,6 +161,86 @@ function book_bookmarks(int $bookId): array
 {
     $list = read_reading_data()['bookmarks'][(string) $bookId] ?? [];
     return is_array($list) ? array_values(array_filter($list, fn($b) => is_array($b) && valid_cfi($b['cfi'] ?? null))) : [];
+}
+
+const READING_BACKUPS = 14;
+
+/**
+ * Keep a dated copy of reading.json.
+ *
+ * Positions and finished dates could be rebuilt by reading again, but
+ * highlights and their notes are the one thing in this app that exists
+ * nowhere else - not in Calibre, not in the EPUB. One copy a day, the last
+ * fortnight kept, and nothing written when the day's copy already matches.
+ */
+function backup_reading(): void
+{
+    $raw = read_reading_raw();
+    if (trim($raw) === '') {
+        return;
+    }
+    $dir = DATA_DIR . '/reading-backups';
+    if (!is_dir($dir) && !@mkdir($dir, 0700, true)) {
+        return;
+    }
+    $today = $dir . '/reading-' . date('Y-m-d') . '.json';
+    if (is_file($today) && @file_get_contents($today) === $raw) {
+        return;
+    }
+    $tmp = $today . '.new';
+    if (@file_put_contents($tmp, $raw, LOCK_EX) === false) {
+        return;
+    }
+    @chmod($tmp, 0600);
+    // Rename so a reader never sees a half-written backup.
+    @rename($tmp, $today);
+
+    $old = glob($dir . '/reading-*.json') ?: [];
+    sort($old);
+    foreach (array_slice($old, 0, max(0, count($old) - READING_BACKUPS)) as $f) {
+        @unlink($f);
+    }
+}
+
+const MAX_NOTES_PER_BOOK = 500;
+const MAX_NOTE_CHARS = 2000;
+
+/**
+ * A stretch of text as epub.js writes it for a selection, e.g.
+ * epubcfi(/6/10!/4/2,/1:0,/3:48) - one CFI with a start and an end in it.
+ * A plain position would highlight nothing, so insist on the comma.
+ */
+function valid_range_cfi($cfi): bool
+{
+    return is_string($cfi) && strlen($cfi) <= 1200
+        && preg_match('/^epubcfi\(.+,.+,.+\)$/sD', $cfi) === 1;
+}
+
+/**
+ * A passage or a comment: longer than a label, and kept as the reader typed
+ * it apart from control characters and a cap on length. Paragraph breaks in a
+ * comment are worth keeping, so only tabs and stray control codes go.
+ */
+function clean_note_text($s, int $max = MAX_NOTE_CHARS): string
+{
+    $s = preg_replace('/\r\n?/u', "\n", (string) $s) ?? '';
+    $s = preg_replace('/[^\P{C}\n]+/u', ' ', $s) ?? '';
+    $s = preg_replace('/[ \t]+/u', ' ', $s) ?? '';
+    $s = trim((string) preg_replace('/\n{3,}/u', "\n\n", $s));
+    return mb_strlen($s) > $max ? rtrim(mb_substr($s, 0, $max - 1)) . '…' : $s;
+}
+
+/**
+ * Highlights for one book, in the order saved.
+ * Each: cfi (a range), text (the passage), note (the reader's comment, may be
+ * empty), label (chapter), pct (fraction or null), created, updated.
+ */
+function book_notes(int $bookId): array
+{
+    $list = read_reading_data()['notes'][(string) $bookId] ?? [];
+    return is_array($list)
+        ? array_values(array_filter($list, fn($n) => is_array($n) && valid_range_cfi($n['cfi'] ?? null)))
+        : [];
 }
 
 /**

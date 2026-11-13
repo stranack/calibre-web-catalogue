@@ -248,3 +248,125 @@ button { font: inherit; color: inherit; }
   pointer-events: none;
 }
 .rd-toast[hidden] { display: none; }
+
+/* ---- Highlights and notes ---------------------------------------------- */
+
+/* epub.js paints each highlight as an SVG rectangle over the words. The
+   colour has to sit under dark ink on paper and over light ink at night, so
+   each background sets its own rather than one tint trying to serve all. */
+/* A highlight carries exactly one of these two classes - plain, or with a
+   comment on it - so each rule has to set the whole look, not lean on the
+   other. The two are a shade apart, enough to tell at a glance. */
+.rd-hl rect, .rd-hl-note rect {
+  fill: #f6d978;
+  fill-opacity: 0.45;
+  mix-blend-mode: multiply;
+}
+.rd-hl-note rect { fill: #f2b84b; fill-opacity: 0.5; }
+:root[data-reader-theme="sepia"] .rd-hl rect,
+:root[data-reader-theme="sepia"] .rd-hl-note rect { fill: #d9a13c; fill-opacity: 0.4; }
+:root[data-reader-theme="sepia"] .rd-hl-note rect { fill: #c9801f; fill-opacity: 0.42; }
+:root[data-reader-theme="mist"] .rd-hl rect,
+:root[data-reader-theme="mist"] .rd-hl-note rect { fill: #e3c766; fill-opacity: 0.45; }
+:root[data-reader-theme="mist"] .rd-hl-note rect { fill: #d9a93c; fill-opacity: 0.48; }
+/* The mark is painted OVER the words, not behind them, so it can only ever
+   be a blend - anything solid hides the text. Multiply is what makes it work
+   on a pale page: the ink stays dark and the paper takes the colour.
+   At night that reverses. Multiply would tint the white WORDS amber and dim
+   them; screen leaves white exactly white and lifts only the page behind it.
+   So the fill here is a dark amber: the block warms, the text doesn't move. */
+:root[data-reader-theme="night"] .rd-hl rect,
+:root[data-reader-theme="night"] .rd-hl-note rect {
+  fill: #3c2d0a; fill-opacity: 1; mix-blend-mode: screen;
+}
+:root[data-reader-theme="night"] .rd-hl-note rect { fill: #5e460e; }
+.rd-hl, .rd-hl-note { cursor: pointer; }
+
+/* The bar that appears by a selection. */
+.rd-sel {
+  position: fixed; z-index: 40; display: flex; gap: 2px;
+  padding: 4px; border-radius: 10px;
+  background: var(--chrome); border: 1px solid var(--rule); box-shadow: var(--shadow);
+}
+.rd-sel[hidden] { display: none; }
+.rd-sel button {
+  border: 0; border-radius: 7px; background: transparent; cursor: pointer;
+  padding: 8px 12px; min-height: 40px;
+  font: 600 15px/1.2 var(--sans); color: var(--fg); white-space: nowrap;
+}
+.rd-sel button:hover { background: color-mix(in srgb, var(--fg) 9%, transparent); }
+
+/* The comment box. */
+.rd-noteedit {
+  position: fixed; z-index: 50; inset: 0; display: grid; place-items: center;
+  padding: 16px; background: color-mix(in srgb, #000 42%, transparent);
+}
+.rd-noteedit[hidden] { display: none; }
+.rd-noteedit-box {
+  width: min(560px, 100%); max-height: 90dvh; overflow: auto;
+  padding: 18px; border-radius: 14px;
+  background: var(--chrome); color: var(--fg); box-shadow: var(--shadow);
+}
+.rd-noteedit-box h2 { margin: 0 0 10px; font: 600 20px/1.2 var(--serif); }
+.rd-noteedit-quote {
+  margin: 0 0 14px; padding: 8px 12px;
+  border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--fg) 5%, transparent);
+  font: italic 400 15px/1.5 var(--serif); color: var(--muted);
+  max-height: 9em; overflow: auto;
+}
+.rd-noteedit-quote[hidden] { display: none; }
+.rd-noteedit-label { display: block; margin-bottom: 4px; font: 600 14px/1.3 var(--sans); }
+.rd-noteedit textarea {
+  width: 100%; resize: vertical;
+  padding: 10px; border: 1px solid var(--rule); border-radius: 8px;
+  background: var(--bg); color: var(--fg);
+  font: 400 16px/1.5 var(--serif);
+}
+.rd-noteedit-count { margin: 4px 0 12px; min-height: 1.2em; font: 400 13px/1.2 var(--sans); color: var(--muted); }
+.rd-noteedit-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rd-noteedit-spacer { flex: 1; }
+.rd-noteedit-acts button {
+  border: 1px solid var(--rule); border-radius: 8px; background: var(--bg); color: var(--fg);
+  padding: 9px 16px; min-height: 42px; cursor: pointer;
+  font: 600 15px/1.2 var(--sans);
+}
+.rd-noteedit-acts button:hover { background: color-mix(in srgb, var(--fg) 7%, transparent); }
+.rd-noteedit-primary { background: var(--accent) !important; color: var(--accent-ink) !important; border-color: var(--accent) !important; }
+.rd-noteedit-primary:hover { filter: brightness(1.08); }
+.rd-noteedit-danger { color: #b3261e !important; }
+:root[data-reader-theme="night"] .rd-noteedit-danger { color: #ff9c92 !important; }
+.rd-noteedit-danger[hidden] { display: none; }
+
+/* The list in the Notes tab. */
+.rd-notes[hidden] { display: none; }
+.rd-notes-list { list-style: none; margin: 4px 0 0; padding: 0; }
+.rd-notes-list li {
+  display: flex; align-items: flex-start; gap: 4px;
+  border-bottom: 1px solid var(--rule);
+}
+.rd-notes-list li:last-child { border-bottom: 0; }
+.rd-note-go {
+  flex: 1; min-width: 0; display: block; text-align: left;
+  padding: 10px 8px; border: 0; border-radius: 6px; background: transparent; cursor: pointer;
+}
+.rd-note-go:hover { background: color-mix(in srgb, var(--fg) 7%, transparent); }
+.rd-note-head { display: block; font-weight: 600; line-height: 1.3; }
+.rd-note-quote {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  margin-top: 3px; padding-left: 8px; border-left: 2px solid var(--rule);
+  font: italic 400 14px/1.4 var(--serif); color: var(--muted);
+}
+/* The reader's own words, which matter more than the passage they're on. */
+.rd-note-mine {
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+  margin-top: 6px; white-space: pre-wrap;
+  font: 400 15px/1.45 var(--serif); color: var(--fg);
+}
+.rd-note-acts { flex: none; display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+.rd-note-edit, .rd-note-del {
+  border: 0; border-radius: 8px; background: transparent; cursor: pointer; color: var(--muted);
+  min-height: 34px; padding: 0 8px;
+  font: 600 13px/1 var(--sans);
+}
+.rd-note-del { font-size: 22px; }
+.rd-note-edit:hover, .rd-note-del:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 9%, transparent); }

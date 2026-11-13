@@ -29,6 +29,7 @@
   var rendition = null;
   var lastLocation = null;
   var bookmarks = Array.isArray(cfg.bookmarks) ? cfg.bookmarks.slice() : [];
+  var notes = Array.isArray(cfg.notes) ? cfg.notes.slice() : [];
   var $ = function (id) { return document.getElementById(id); };
 
   // ---- Status messages ---------------------------------------------------
@@ -489,16 +490,272 @@
     });
   }
 
+  // ---- Highlights and notes ---------------------------------------------
+  //
+  // A note is a stretch of text (a range CFI) plus the passage itself and,
+  // if you want one, a comment. epub.js draws the highlight: annotations
+  // re-attach themselves on its render hook, so each one is added once and
+  // survives page turns and relayouts without our help.
+
+  var MAX_NOTE = typeof cfg.maxNote === 'number' ? cfg.maxNote : 2000;
+  var drawn = {};
+
+  function noteAt(cfi) {
+    for (var i = 0; i < notes.length; i++) {
+      if (notes[i].cfi === cfi) { return notes[i]; }
+    }
+    return null;
+  }
+
+  function drawNote(n) {
+    if (!rendition || drawn[n.cfi]) { return; }
+    try {
+      // One class, never two: epub.js hands this to classList.add, which
+      // rejects any token with a space in it.
+      rendition.annotations.add('highlight', n.cfi, {}, function () {
+        openNoteEditor(noteAt(n.cfi) || n);
+      }, n.note ? 'rd-hl-note' : 'rd-hl', {});
+      drawn[n.cfi] = true;
+    } catch (e) {
+      // Usually a range the book no longer has, after a re-convert in
+      // Calibre: the note still shows in the list, just without its mark.
+      // Say so quietly rather than leaving a real fault invisible.
+      if (window.console && console.warn) {
+        console.warn('Could not draw a highlight at ' + n.cfi + ': ' + (e && e.message));
+      }
+    }
+  }
+
+  function undrawNote(cfi) {
+    if (!rendition || !drawn[cfi]) { return; }
+    try { rendition.annotations.remove(cfi, 'highlight'); } catch (e) { /* already gone */ }
+    delete drawn[cfi];
+  }
+
+  function drawAllNotes() {
+    notes.forEach(drawNote);
+  }
+
+  /** Redraw one note, so a comment added or removed changes its shade. */
+  function redrawNote(cfi) {
+    undrawNote(cfi);
+    var n = noteAt(cfi);
+    if (n) { drawNote(n); }
+  }
+
+  function saveNote(body) {
+    body.id = cfg.id;
+    return post(body).then(function (res) {
+      return res && res.ok ? res.json() : null;
+    }).then(function (data) {
+      if (data && Array.isArray(data.notes)) {
+        notes = data.notes;
+        renderNotes();
+      }
+      return data;
+    }).catch(function () { return null; });
+  }
+
+  function addNote(cfiRange, text, comment) {
+    var had = noteAt(cfiRange);
+    var n = {
+      cfi: cfiRange,
+      text: text,
+      note: comment || '',
+      label: (lastLocation && lastLocation.start && chapterLabel(lastLocation.start.href)) || '',
+      pct: percentFor(lastLocation)
+    };
+    // Show it at once; the save only corrects the stored copy.
+    notes = notes.filter(function (x) { return x.cfi !== cfiRange; }).concat([n]);
+    renderNotes();
+    if (had) { redrawNote(cfiRange); } else { drawNote(n); }
+    return saveNote({ note: n }).then(function (data) {
+      if (!data) { toast('Saved on this device only - the note didn\'t reach the server.'); }
+      else { redrawNote(cfiRange); }
+    });
+  }
+
+  function removeNote(cfi) {
+    notes = notes.filter(function (n) { return n.cfi !== cfi; });
+    undrawNote(cfi);
+    renderNotes();
+    saveNote({ removeNote: cfi });
+  }
+
+  // ---- What to do with a selection --------------------------------------
+
+  var selNow = null;
+
+  function hideSelBar() {
+    $('rd-sel').hidden = true;
+    selNow = null;
+  }
+
+  /**
+   * Put the little bar by the selection, in page coordinates. The text is
+   * inside the book's frame, so its rectangle needs the frame's own offset
+   * adding before it means anything out here.
+   */
+  function placeSelBar(rect, frame) {
+    var bar = $('rd-sel');
+    bar.hidden = false;
+    var off = frame ? frame.getBoundingClientRect() : { left: 0, top: 0 };
+    var w = bar.offsetWidth;
+    var h = bar.offsetHeight;
+    var midX = off.left + rect.left + rect.width / 2;
+    var left = Math.max(8, Math.min(window.innerWidth - w - 8, midX - w / 2));
+    var above = off.top + rect.top - h - 10;
+    var below = off.top + rect.bottom + 10;
+    var top = above > 8 ? above : Math.min(window.innerHeight - h - 8, below);
+    bar.style.left = Math.round(left) + 'px';
+    bar.style.top = Math.round(top) + 'px';
+  }
+
+  function onSelected(cfiRange, contents) {
+    var win = contents && contents.window;
+    var sel = win && win.getSelection && win.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) { hideSelBar(); return; }
+    var text = String(sel.toString() || '').replace(/\s+/g, ' ').trim();
+    if (!text) { hideSelBar(); return; }
+    var range = sel.getRangeAt(0);
+    selNow = { cfi: cfiRange, text: text, contents: contents };
+    var existing = noteAt(cfiRange);
+    $('rd-sel-mark').textContent = existing ? 'Remove highlight' : 'Highlight';
+    $('rd-sel-note').textContent = existing && existing.note ? 'Edit note' : 'Add note';
+    placeSelBar(range.getBoundingClientRect(), win.frameElement);
+  }
+
+  /** Let go of the selection in the book, so the highlight shows plainly. */
+  function dropSelection() {
+    var c = selNow && selNow.contents;
+    try {
+      if (c && c.window && c.window.getSelection) { c.window.getSelection().removeAllRanges(); }
+    } catch (e) { /* frame already gone */ }
+  }
+
+  // ---- The comment box --------------------------------------------------
+
+  var editing = null;
+
+  function noteLeft() {
+    var left = MAX_NOTE - $('rd-noteedit-text').value.length;
+    $('rd-noteedit-left').textContent = left < 200 ? left + ' characters left' : '';
+  }
+
+  function openNoteEditor(n) {
+    if (!n || !n.cfi) { return; }
+    editing = { cfi: n.cfi, text: n.text || '' };
+    hideSelBar();
+    closePanels();
+    $('rd-noteedit-quote').textContent = n.text || '';
+    $('rd-noteedit-quote').hidden = !n.text;
+    $('rd-noteedit-text').value = n.note || '';
+    $('rd-noteedit-del').hidden = !noteAt(n.cfi);
+    $('rd-noteedit').hidden = false;
+    noteLeft();
+    $('rd-noteedit-text').focus();
+  }
+
+  function closeNoteEditor() {
+    $('rd-noteedit').hidden = true;
+    editing = null;
+  }
+
+  function saveNoteEditor() {
+    if (!editing) { return; }
+    var e = editing;
+    var comment = $('rd-noteedit-text').value;
+    closeNoteEditor();
+    dropSelection();
+    addNote(e.cfi, e.text, comment);
+    toast(comment.trim() ? 'Note saved' : 'Highlighted');
+  }
+
+  // ---- The notes list ---------------------------------------------------
+
+  function renderNotes() {
+    var list = $('rd-notes-list');
+    // Furthest into the book first, to match the bookmarks list.
+    var sorted = notes.slice().sort(function (a, b) { return cfiCompare(b.cfi, a.cfi); });
+    list.innerHTML = '';
+    $('rd-notes-empty').hidden = sorted.length > 0;
+    $('rd-notes-count').textContent = sorted.length ? ' ' + sorted.length : '';
+    sorted.forEach(function (n) {
+      var li = document.createElement('li');
+      if (n.note) { li.className = 'rd-has-note'; }
+
+      var go = document.createElement('button');
+      go.type = 'button';
+      go.className = 'rd-note-go';
+
+      var head = document.createElement('span');
+      head.className = 'rd-note-head';
+      var pct = typeof n.pct === 'number' ? Math.round(n.pct * 100) + '%' : '';
+      head.textContent = (n.label || 'Note') + (pct ? ' · ' + pct : '');
+      go.appendChild(head);
+
+      if (n.text) {
+        var quote = document.createElement('span');
+        quote.className = 'rd-note-quote';
+        quote.textContent = n.text;
+        go.appendChild(quote);
+      }
+      if (n.note) {
+        var mine = document.createElement('span');
+        mine.className = 'rd-note-mine';
+        mine.textContent = n.note;
+        go.appendChild(mine);
+      }
+      go.addEventListener('click', function () {
+        closePanels();
+        userMoved();
+        goTo(n.cfi, 'note');
+      });
+
+      var edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'rd-note-edit';
+      edit.setAttribute('aria-label', (n.note ? 'Edit the note on' : 'Add a note to') + ' this highlight');
+      edit.textContent = n.note ? 'Edit' : 'Note';
+      edit.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        openNoteEditor(n);
+      });
+
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'rd-note-del';
+      del.setAttribute('aria-label', 'Remove this highlight');
+      del.textContent = '×';
+      del.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        removeNote(n.cfi);
+        var next = list.querySelector('.rd-note-del') || $('rd-tab-notes');
+        next.focus();
+      });
+
+      var acts = document.createElement('div');
+      acts.className = 'rd-note-acts';
+      acts.appendChild(edit);
+      acts.appendChild(del);
+      li.appendChild(go);
+      li.appendChild(acts);
+      list.appendChild(li);
+    });
+  }
+
+  var TABS = ['toc', 'marks', 'notes'];
+  var TAB_PANEL = { toc: 'rd-toc-list', marks: 'rd-marks', notes: 'rd-notes' };
   var tocTab = 'toc';
   function showTab(which) {
-    tocTab = which;
-    var marks = which === 'marks';
-    $('rd-tab-toc').setAttribute('aria-selected', String(!marks));
-    $('rd-tab-marks').setAttribute('aria-selected', String(marks));
-    $('rd-tab-toc').tabIndex = marks ? -1 : 0;
-    $('rd-tab-marks').tabIndex = marks ? 0 : -1;
-    $('rd-toc-list').hidden = marks;
-    $('rd-marks').hidden = !marks;
+    tocTab = TABS.indexOf(which) >= 0 ? which : 'toc';
+    TABS.forEach(function (t) {
+      var on = t === tocTab;
+      var tab = $('rd-tab-' + t);
+      tab.setAttribute('aria-selected', String(on));
+      tab.tabIndex = on ? 0 : -1;
+      $(TAB_PANEL[t]).hidden = !on;
+    });
   }
 
   // ---- Panels -----------------------------------------------------------
@@ -550,7 +807,12 @@
 
   function onKey(e) {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) { return; }
-    if (e.key === 'Escape') { if (panelsOpen()) { closePanels(); } return; }
+    if (e.key === 'Escape') {
+      if (!$('rd-noteedit').hidden) { closeNoteEditor(); dropSelection(); return; }
+      if (!$('rd-sel').hidden) { hideSelBar(); return; }
+      if (panelsOpen()) { closePanels(); }
+      return;
+    }
     if (panelsOpen()) { return; }
     var t = e.target;
     if (t && t.closest && t.closest('button, a, input, select, textarea') && t.ownerDocument === document) {
@@ -567,17 +829,25 @@
     var doc = contents.document;
     var touch = null;
     var swiped = false;
+    /** True while the reader has text selected in this page. */
+    function hasSelection() {
+      var sel = doc.getSelection && doc.getSelection();
+      return !!(sel && !sel.isCollapsed && String(sel).trim());
+    }
     doc.addEventListener('keydown', onKey);
     doc.addEventListener('touchstart', function (e) {
       if (e.touches.length !== 1) { touch = null; return; }
-      touch = { x: e.touches[0].screenX, y: e.touches[0].screenY, t: Date.now() };
+      touch = { x: e.touches[0].screenX, y: e.touches[0].screenY, t: Date.now(), sel: hasSelection() };
       swiped = false;
     }, { passive: true });
     doc.addEventListener('touchend', function (e) {
       if (!touch) { return; }
       var dx = e.changedTouches[0].screenX - touch.x;
       var dy = e.changedTouches[0].screenY - touch.y;
-      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5 && Date.now() - touch.t < 800) {
+      // Dragging the selection handles travels just like a swipe, so a touch
+      // that starts or ends with text selected never turns the page.
+      var selecting = touch.sel || hasSelection();
+      if (!selecting && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5 && Date.now() - touch.t < 800) {
         swiped = true;
         if (dx < 0) { next(); } else { prev(); }
       }
@@ -587,8 +857,10 @@
       if (swiped) { swiped = false; return; }
       if (panelsOpen()) { closePanels(); return; }
       if (e.target.closest && e.target.closest('a[href]')) { return; }
-      var sel = doc.getSelection && doc.getSelection();
-      if (sel && !sel.isCollapsed) { return; }
+      if (hasSelection()) { return; }
+      // The tap that clears a selection shouldn't also turn the page: one
+      // gesture, one thing happening.
+      if (selNow) { hideSelBar(); return; }
       var frame = doc.defaultView && doc.defaultView.frameElement;
       var viewer = $('rd-viewer').getBoundingClientRect();
       var x = (frame ? frame.getBoundingClientRect().left : 0) + e.clientX - viewer.left;
@@ -652,8 +924,10 @@
         wireInput(contents);
 
       });
+      rendition.on('selected', onSelected);
       rendition.on('relocated', function (loc) {
         lastLocation = loc;
+        hideSelBar();
         showWhere(loc);
         savePosition(loc);
         noteFinished(loc);
@@ -671,6 +945,8 @@
       status('');
       $('rd-mark-btn').disabled = false;
       lastBox = $('rd-viewer').clientWidth + 'x' + $('rd-viewer').clientHeight;
+      drawAllNotes();
+      renderNotes();
       loadLocations();
     }).catch(function (err) {
       failed(err && err.message ? err.message : 'The book couldn\'t be opened.');
@@ -798,16 +1074,66 @@
   $('rd-next').addEventListener('click', next);
   $('rd-toc-btn').addEventListener('click', function () { togglePanel('rd-toc-btn', 'rd-toc'); });
   $('rd-mark-btn').addEventListener('click', function () { closePanels(); toggleMark(); });
-  $('rd-tab-toc').addEventListener('click', function () { showTab('toc'); });
-  $('rd-tab-marks').addEventListener('click', function () { showTab('marks'); });
+  TABS.forEach(function (t) {
+    $('rd-tab-' + t).addEventListener('click', function () { showTab(t); });
+  });
   $('rd-toc').querySelector('.rd-tabs').addEventListener('keydown', function (e) {
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
       e.stopPropagation();
-      showTab(tocTab === 'toc' ? 'marks' : 'toc');
-      $(tocTab === 'toc' ? 'rd-tab-toc' : 'rd-tab-marks').focus();
+      var step = e.key === 'ArrowRight' ? 1 : TABS.length - 1;
+      var next = TABS[(TABS.indexOf(tocTab) + step) % TABS.length];
+      showTab(next);
+      $('rd-tab-' + next).focus();
     }
   });
+  $('rd-sel-mark').addEventListener('click', function () {
+    if (!selNow) { return; }
+    var cfi = selNow.cfi;
+    if (noteAt(cfi)) {
+      removeNote(cfi);
+      toast('Highlight removed');
+    } else {
+      addNote(cfi, selNow.text, '');
+      toast('Highlighted');
+    }
+    dropSelection();
+    hideSelBar();
+  });
+  $('rd-sel-note').addEventListener('click', function () {
+    if (!selNow) { return; }
+    openNoteEditor(noteAt(selNow.cfi) || { cfi: selNow.cfi, text: selNow.text });
+  });
+  $('rd-sel-copy').addEventListener('click', function () {
+    if (!selNow) { return; }
+    var text = selNow.text;
+    var done = function () { toast('Copied'); dropSelection(); hideSelBar(); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { toast('Couldn\'t copy here'); });
+    } else {
+      toast('Couldn\'t copy here');
+    }
+  });
+  $('rd-noteedit-text').addEventListener('input', noteLeft);
+  $('rd-noteedit-save').addEventListener('click', saveNoteEditor);
+  $('rd-noteedit-cancel').addEventListener('click', function () { closeNoteEditor(); dropSelection(); });
+  $('rd-noteedit-del').addEventListener('click', function () {
+    if (!editing) { return; }
+    var cfi = editing.cfi;
+    closeNoteEditor();
+    dropSelection();
+    removeNote(cfi);
+    toast('Highlight removed');
+  });
+  // Ctrl/Cmd+Enter saves, since Enter has to make paragraphs in the comment.
+  $('rd-noteedit-text').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveNoteEditor(); }
+  });
+  // Clicking the backdrop leaves the comment alone rather than losing it.
+  $('rd-noteedit').addEventListener('click', function (e) {
+    if (e.target === $('rd-noteedit')) { closeNoteEditor(); dropSelection(); }
+  });
+
   $('rd-set-btn').addEventListener('click', function () { togglePanel('rd-set-btn', 'rd-settings'); });
   Array.prototype.forEach.call(document.querySelectorAll('[data-close]'), function (b) {
     b.addEventListener('click', closePanels);
@@ -822,6 +1148,8 @@
   $('rd-larger').addEventListener('click', function () { change('size', Math.min(200, settings.size + 10)); });
   document.addEventListener('keydown', onKey);
   document.addEventListener('click', function (e) {
+    if (!$('rd-noteedit').hidden) { return; }
+    if (e.target.closest('#rd-sel')) { return; }
     if (panelsOpen() && !e.target.closest('.rd-panel, .rd-tool')) { closePanels(); }
   });
   document.addEventListener('visibilitychange', function () {

@@ -48,6 +48,8 @@ $config = [
     'settings' => $data['settings'],
     'position' => reading_position((int) $b['id']),
     'bookmarks' => book_bookmarks((int) $b['id']),
+    'notes'    => book_notes((int) $b['id']),
+    'maxNote'  => MAX_NOTE_CHARS,
     'finished' => isset(finished_books()[(int) $b['id']]),
 ];
 $v = fn(string $f) => h((string) @filemtime(APP_ROOT . '/' . $f));
@@ -113,20 +115,49 @@ $theme = $data['settings']['theme'];
   <p class="rd-where" id="rd-where"></p>
 </footer>
 
-<nav class="rd-panel rd-panel-toc" id="rd-toc" aria-label="Contents and bookmarks" hidden>
+<nav class="rd-panel rd-panel-toc" id="rd-toc" aria-label="Contents, bookmarks and notes" hidden>
   <div class="rd-panel-head">
     <div class="rd-tabs" role="tablist">
       <button type="button" role="tab" id="rd-tab-toc" aria-selected="true" aria-controls="rd-toc-list">Contents</button>
       <button type="button" role="tab" id="rd-tab-marks" aria-selected="false" aria-controls="rd-marks" tabindex="-1">Bookmarks<span class="rd-count" id="rd-marks-count"></span></button>
+      <button type="button" role="tab" id="rd-tab-notes" aria-selected="false" aria-controls="rd-notes" tabindex="-1">Notes<span class="rd-count" id="rd-notes-count"></span></button>
     </div>
-    <button type="button" class="rd-close" data-close aria-label="Close contents and bookmarks">×</button>
+    <button type="button" class="rd-close" data-close aria-label="Close contents, bookmarks and notes">×</button>
   </div>
   <ol class="rd-toc-list" id="rd-toc-list" role="tabpanel" aria-labelledby="rd-tab-toc"><li class="rd-muted">Loading…</li></ol>
   <div class="rd-marks" id="rd-marks" role="tabpanel" aria-labelledby="rd-tab-marks" hidden>
     <ul class="rd-marks-list" id="rd-marks-list"></ul>
     <p class="rd-muted" id="rd-marks-empty">No bookmarks yet. Tap <strong>Bookmark</strong> at the top to mark the page you're on.</p>
   </div>
+  <div class="rd-notes" id="rd-notes" role="tabpanel" aria-labelledby="rd-tab-notes" hidden>
+    <ul class="rd-notes-list" id="rd-notes-list"></ul>
+    <p class="rd-muted" id="rd-notes-empty">No notes yet. Select a few words in the book to highlight them, and add a comment if you want one.</p>
+  </div>
 </nav>
+
+<!-- Appears over the page when text is selected, near the selection. -->
+<div class="rd-sel" id="rd-sel" hidden>
+  <button type="button" id="rd-sel-mark">Highlight</button>
+  <button type="button" id="rd-sel-note">Add note</button>
+  <button type="button" id="rd-sel-copy">Copy</button>
+</div>
+
+<!-- The comment box for one highlight. -->
+<div class="rd-noteedit" id="rd-noteedit" role="dialog" aria-modal="true" aria-labelledby="rd-noteedit-title" hidden>
+  <div class="rd-noteedit-box">
+    <h2 id="rd-noteedit-title">Note</h2>
+    <blockquote class="rd-noteedit-quote" id="rd-noteedit-quote"></blockquote>
+    <label class="rd-noteedit-label" for="rd-noteedit-text">Your comment</label>
+    <textarea id="rd-noteedit-text" rows="5" maxlength="<?= (int) MAX_NOTE_CHARS ?>" placeholder="Why this passage matters, what it reminds you of…"></textarea>
+    <p class="rd-noteedit-count"><span id="rd-noteedit-left"></span></p>
+    <div class="rd-noteedit-acts">
+      <button type="button" id="rd-noteedit-del" class="rd-noteedit-danger">Remove highlight</button>
+      <span class="rd-noteedit-spacer"></span>
+      <button type="button" id="rd-noteedit-cancel">Cancel</button>
+      <button type="button" id="rd-noteedit-save" class="rd-noteedit-primary">Save</button>
+    </div>
+  </div>
+</div>
 
 <section class="rd-panel rd-panel-settings" id="rd-settings" aria-label="Display settings" hidden>
   <div class="rd-panel-head"><h2>Display</h2><button type="button" class="rd-close" data-close aria-label="Close display settings">×</button></div>

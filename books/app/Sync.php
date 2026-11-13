@@ -36,6 +36,10 @@ final class Sync
             return ['status' => 'busy'];
         }
 
+        // Before anything else: the highlights and notes are the only data
+        // here that couldn't be rebuilt from Calibre.
+        backup_reading();
+
         $state = read_state();
         $summary = ['status' => 'ok', 'db_updated' => false, 'covers_fetched' => 0, 'covers_failed' => 0, 'covers_removed' => 0, 'pending' => 0];
 

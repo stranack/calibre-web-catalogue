@@ -8,8 +8,13 @@ declare(strict_types=1);
  *   {"settings": {"theme": "sepia", "font": "georgia", "size": 110, "pages": "two"}}
  *   {"id": 1414, "bookmark": {"cfi": "...", "label": "Chapter 2", "pct": 0.1, "text": "Opening words"}}
  *   {"id": 1414, "removeBookmark": "epubcfi(...)"}
+ *   {"id": 1414, "note": {"cfi": "epubcfi(...,...,...)", "text": "The passage",
+ *                         "note": "My comment", "label": "Chapter 2", "pct": 0.1}}
+ *   {"id": 1414, "removeNote": "epubcfi(...,...,...)"}
  *   {"id": 1414, "finished": true, "how": "end"}       mark as read (false to undo)
- * The two bookmark calls reply with the book's full bookmark list.
+ * The two bookmark calls reply with the book's full bookmark list, and the two
+ * note calls with its full note list. Saving a note over a range already saved
+ * replaces it, which is how an edited comment comes back.
  */
 require __DIR__ . '/app/bootstrap.php';
 
@@ -56,6 +61,56 @@ try {
         }
         set_finished($id, (bool) $in['finished'], (string) ($in['how'] ?? 'manual'));
         reply(200, ['ok' => true, 'finished' => (bool) $in['finished']]);
+    }
+
+    if (isset($in['note']) || isset($in['removeNote'])) {
+        if ($id <= 0) {
+            reply(400, ['error' => 'Need a book id']);
+        }
+        $add = is_array($in['note'] ?? null) ? $in['note'] : null;
+        $remove = $in['removeNote'] ?? null;
+        if (($add && !valid_range_cfi($add['cfi'] ?? null)) || (!$add && !valid_range_cfi($remove))) {
+            reply(400, ['error' => 'Need the stretch of text the note is on']);
+        }
+        if ($add && clean_note_text($add['text'] ?? '') === '' && clean_note_text($add['note'] ?? '') === '') {
+            reply(400, ['error' => 'Nothing to save']);
+        }
+        $list = [];
+        update_reading_data(function (array $d) use ($id, $add, $remove, &$list) {
+            $d['notes'] = is_array($d['notes'] ?? null) ? $d['notes'] : [];
+            $list = array_values(array_filter((array) ($d['notes'][(string) $id] ?? []), fn($n) => is_array($n) && valid_range_cfi($n['cfi'] ?? null)));
+            if ($add) {
+                // Saving over a range we already hold is an edit, so keep the
+                // date it was first made and drop the old copy.
+                $was = null;
+                foreach ($list as $n) {
+                    if ($n['cfi'] === $add['cfi']) {
+                        $was = $n;
+                        break;
+                    }
+                }
+                $list = array_values(array_filter($list, fn($n) => $n['cfi'] !== $add['cfi']));
+                $list[] = [
+                    'cfi'     => (string) $add['cfi'],
+                    'text'    => clean_note_text($add['text'] ?? ''),
+                    'note'    => clean_note_text($add['note'] ?? ''),
+                    'label'   => clean_line($add['label'] ?? '', 120),
+                    'pct'     => isset($add['pct']) && is_numeric($add['pct']) ? max(0.0, min(1.0, (float) $add['pct'])) : null,
+                    'created' => (string) ($was['created'] ?? date('c')),
+                    'updated' => date('c'),
+                ];
+                $list = array_slice($list, -MAX_NOTES_PER_BOOK);
+            } else {
+                $list = array_values(array_filter($list, fn($n) => $n['cfi'] !== $remove));
+            }
+            if ($list) {
+                $d['notes'][(string) $id] = $list;
+            } else {
+                unset($d['notes'][(string) $id]);
+            }
+            return $d;
+        });
+        reply(200, ['ok' => true, 'notes' => $list]);
     }
 
     if (isset($in['bookmark']) || isset($in['removeBookmark'])) {
