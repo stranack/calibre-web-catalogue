@@ -78,6 +78,14 @@ $theme = $data['settings']['theme'];
     <h1 class="rd-title"><?= h($b['title']) ?></h1>
     <p class="rd-chapter" id="rd-chapter"></p>
   </div>
+  <!-- Shown only while text is selected. Chrome's own selection menu floats
+       over the page and always paints on top, so these live up here where it
+       can't reach them. -->
+  <div class="rd-selacts" id="rd-selacts" role="group" aria-label="Selected text" hidden>
+    <button type="button" class="rd-selact" id="rd-sel-mark">Highlight</button>
+    <button type="button" class="rd-selact" id="rd-sel-note">Add note</button>
+  </div>
+  <div class="rd-tools" id="rd-tools">
   <button type="button" class="rd-tool" id="rd-mark-btn" aria-pressed="false" disabled>
     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path class="rd-ribbon" d="M6.5 3.5h11v17l-5.5-4-5.5 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
     <span class="rd-tool-label" id="rd-mark-label">Bookmark</span>
@@ -95,6 +103,7 @@ $theme = $data['settings']['theme'];
     <svg class="rd-icon-exit" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <span class="rd-tool-label" id="rd-full-label">Full screen</span>
   </button>
+  </div>
 </header>
 
 <div class="rd-stage">
@@ -134,13 +143,6 @@ $theme = $data['settings']['theme'];
     <p class="rd-muted" id="rd-notes-empty">No notes yet. Select a few words in the book to highlight them, and add a comment if you want one.</p>
   </div>
 </nav>
-
-<!-- Appears over the page when text is selected, near the selection. -->
-<div class="rd-sel" id="rd-sel" hidden>
-  <button type="button" id="rd-sel-mark">Highlight</button>
-  <button type="button" id="rd-sel-note">Add note</button>
-  <button type="button" id="rd-sel-copy">Copy</button>
-</div>
 
 <!-- The comment box for one highlight. -->
 <div class="rd-noteedit" id="rd-noteedit" role="dialog" aria-modal="true" aria-labelledby="rd-noteedit-title" hidden>

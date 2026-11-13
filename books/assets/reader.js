@@ -586,43 +586,36 @@
 
   var selNow = null;
 
-  function hideSelBar() {
-    $('rd-sel').hidden = true;
-    selNow = null;
+  /**
+   * The browser draws its own menu beside selected text - Copy, Translate and
+   * the rest - and that menu is browser chrome, so it paints over anything
+   * this page puts near the selection. These two actions therefore take over
+   * the header while a selection is live, where nothing can cover them, and
+   * the usual tools step aside until it is let go.
+   */
+  function showSelBar(on) {
+    $('rd-selacts').hidden = !on;
+    $('rd-tools').hidden = on;
   }
 
-  /**
-   * Put the little bar by the selection, in page coordinates. The text is
-   * inside the book's frame, so its rectangle needs the frame's own offset
-   * adding before it means anything out here.
-   */
-  function placeSelBar(rect, frame) {
-    var bar = $('rd-sel');
-    bar.hidden = false;
-    var off = frame ? frame.getBoundingClientRect() : { left: 0, top: 0 };
-    var w = bar.offsetWidth;
-    var h = bar.offsetHeight;
-    var midX = off.left + rect.left + rect.width / 2;
-    var left = Math.max(8, Math.min(window.innerWidth - w - 8, midX - w / 2));
-    var above = off.top + rect.top - h - 10;
-    var below = off.top + rect.bottom + 10;
-    var top = above > 8 ? above : Math.min(window.innerHeight - h - 8, below);
-    bar.style.left = Math.round(left) + 'px';
-    bar.style.top = Math.round(top) + 'px';
+  function hideSelBar() {
+    showSelBar(false);
+    selNow = null;
   }
 
   function onSelected(cfiRange, contents) {
     var win = contents && contents.window;
     var sel = win && win.getSelection && win.getSelection();
-    if (!sel || sel.isCollapsed || !sel.rangeCount) { hideSelBar(); return; }
+    if (!sel || sel.isCollapsed) { hideSelBar(); return; }
     var text = String(sel.toString() || '').replace(/\s+/g, ' ').trim();
     if (!text) { hideSelBar(); return; }
-    var range = sel.getRangeAt(0);
+    // Keep the passage and its place now: tapping a header button can clear
+    // the selection before the click lands, and by then it's gone.
     selNow = { cfi: cfiRange, text: text, contents: contents };
     var existing = noteAt(cfiRange);
     $('rd-sel-mark').textContent = existing ? 'Remove highlight' : 'Highlight';
     $('rd-sel-note').textContent = existing && existing.note ? 'Edit note' : 'Add note';
-    placeSelBar(range.getBoundingClientRect(), win.frameElement);
+    showSelBar(true);
   }
 
   /** Let go of the selection in the book, so the highlight shows plainly. */
@@ -809,7 +802,7 @@
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) { return; }
     if (e.key === 'Escape') {
       if (!$('rd-noteedit').hidden) { closeNoteEditor(); dropSelection(); return; }
-      if (!$('rd-sel').hidden) { hideSelBar(); return; }
+      if (!$('rd-selacts').hidden) { dropSelection(); hideSelBar(); return; }
       if (panelsOpen()) { closePanels(); }
       return;
     }
@@ -1087,6 +1080,11 @@
       $('rd-tab-' + next).focus();
     }
   });
+  // Pressing a header button must not take the selection away before the
+  // click runs, which is what a plain mousedown on another element does.
+  ['rd-sel-mark', 'rd-sel-note'].forEach(function (id) {
+    $(id).addEventListener('mousedown', function (e) { e.preventDefault(); });
+  });
   $('rd-sel-mark').addEventListener('click', function () {
     if (!selNow) { return; }
     var cfi = selNow.cfi;
@@ -1103,16 +1101,6 @@
   $('rd-sel-note').addEventListener('click', function () {
     if (!selNow) { return; }
     openNoteEditor(noteAt(selNow.cfi) || { cfi: selNow.cfi, text: selNow.text });
-  });
-  $('rd-sel-copy').addEventListener('click', function () {
-    if (!selNow) { return; }
-    var text = selNow.text;
-    var done = function () { toast('Copied'); dropSelection(); hideSelBar(); };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, function () { toast('Couldn\'t copy here'); });
-    } else {
-      toast('Couldn\'t copy here');
-    }
   });
   $('rd-noteedit-text').addEventListener('input', noteLeft);
   $('rd-noteedit-save').addEventListener('click', saveNoteEditor);
@@ -1149,7 +1137,7 @@
   document.addEventListener('keydown', onKey);
   document.addEventListener('click', function (e) {
     if (!$('rd-noteedit').hidden) { return; }
-    if (e.target.closest('#rd-sel')) { return; }
+    if (e.target.closest('#rd-selacts')) { return; }
     if (panelsOpen() && !e.target.closest('.rd-panel, .rd-tool')) { closePanels(); }
   });
   document.addEventListener('visibilitychange', function () {

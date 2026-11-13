@@ -282,19 +282,26 @@ button { font: inherit; color: inherit; }
 :root[data-reader-theme="night"] .rd-hl-note rect { fill: #5e460e; }
 .rd-hl, .rd-hl-note { cursor: pointer; }
 
-/* The bar that appears by a selection. */
-.rd-sel {
-  position: fixed; z-index: 40; display: flex; gap: 2px;
-  padding: 4px; border-radius: 10px;
-  background: var(--chrome); border: 1px solid var(--rule); box-shadow: var(--shadow);
+/* The selection actions, which take over the header while text is selected.
+   They can't float beside the selection: the browser's own Copy/Translate
+   menu goes there and, being browser chrome, paints over the page. */
+.rd-tools { display: flex; align-items: center; gap: 8px; flex: none; min-width: 0; }
+.rd-tools[hidden], .rd-selacts[hidden] { display: none; }
+.rd-selacts { display: flex; align-items: center; gap: 6px; flex: none; }
+.rd-selact {
+  border: 1px solid var(--accent); border-radius: 8px;
+  background: var(--accent); color: var(--accent-ink);
+  min-height: 40px; padding: 0 14px; cursor: pointer;
+  font: 600 15px/1.2 var(--sans); white-space: nowrap;
 }
-.rd-sel[hidden] { display: none; }
-.rd-sel button {
-  border: 0; border-radius: 7px; background: transparent; cursor: pointer;
-  padding: 8px 12px; min-height: 40px;
-  font: 600 15px/1.2 var(--sans); color: var(--fg); white-space: nowrap;
+.rd-selact + .rd-selact { background: transparent; color: var(--fg); border-color: var(--rule); }
+.rd-selact:hover { filter: brightness(1.08); }
+.rd-selact + .rd-selact:hover { background: color-mix(in srgb, var(--fg) 9%, transparent); filter: none; }
+/* These two keep their words at every width: they're the only thing in the
+   bar at that moment, so there is room, and an icon alone wouldn't say it. */
+@media (max-width: 420px) {
+  .rd-selact { padding: 0 10px; font-size: 14px; }
 }
-.rd-sel button:hover { background: color-mix(in srgb, var(--fg) 9%, transparent); }
 
 /* The comment box. */
 .rd-noteedit {
