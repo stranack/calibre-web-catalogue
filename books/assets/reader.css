@@ -116,7 +116,10 @@ button { font: inherit; color: inherit; }
 }
 .rd-progress { flex: 1; height: 3px; border-radius: 2px; background: var(--rule); overflow: hidden; }
 .rd-progress-fill { height: 100%; width: 0; background: var(--accent); transition: width 0.25s; }
-.rd-where { margin: 0; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; }
+/* Always one line tall, even when empty. Without that, the footer grew by a
+   few pixels the moment the percentage first appeared, which shrank the page
+   area and set off a full re-layout in the middle of reading. */
+.rd-where { margin: 0; font-size: 12.5px; line-height: 1.25; min-height: 1.25em; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; }
 
 /* ---- Panels (contents and display settings) --------------------------- */
 

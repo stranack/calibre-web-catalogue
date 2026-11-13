@@ -172,16 +172,32 @@
   var readingAnchor = null;
   var noteNextPage = true;
   var movedSinceOpen = false;
-  function userMoved() { noteNextPage = true; readingAnchor = null; movedSinceOpen = true; }
+  // Counts the reader's own moves, so a return trip planned before one of
+  // them can tell it has been overtaken and stand down.
+  var moves = 0;
+  function userMoved() { noteNextPage = true; readingAnchor = null; movedSinceOpen = true; moves++; }
   function anchorCfi() {
     if (!readingAnchor) { readingAnchor = findAnchor(); }
     return readingAnchor;
   }
-  /** Go back to the reading spot once a re-layout epub.js has started is done. */
+  /**
+   * Go back to the reading spot once a re-layout epub.js has started is done.
+   *
+   * The trip back is planned now but taken up to half a second later, and in
+   * that time the reader may have turned the page. Taking it anyway would
+   * undo the turn - the page flips, then snaps back - so it only goes ahead
+   * if nothing has moved since it was planned.
+   */
   function returnTo(spot) {
     if (!spot) { return; }
     var done = false;
-    function go() { if (!done) { done = true; rendition.display(spot); } }
+    var planned = moves;
+    function go() {
+      if (done) { return; }
+      done = true;
+      if (moves !== planned) { return; }
+      rendition.display(spot);
+    }
     rendition.once('relocated', function () { setTimeout(go, 60); });
     setTimeout(go, 500);
   }
