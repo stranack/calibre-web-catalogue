@@ -195,7 +195,8 @@
     function go() {
       if (done) { return; }
       done = true;
-      if (moves !== planned) { return; }
+      if (moves !== planned) { dbg('returnTo: stood down (page was turned)'); return; }
+      dbg('returnTo: going back to the reading spot');
       rendition.display(spot);
     }
     rendition.once('relocated', function () { setTimeout(go, 60); });
@@ -220,6 +221,7 @@
     var fonts = doc && doc.fonts;
     if (!fonts || !fonts.addEventListener) { return; }
     fonts.addEventListener('loadingdone', function () {
+      dbg('font arrived: re-measuring the chapter');
       if (contents.document) { contents.expand(); }
     });
   }
@@ -833,8 +835,88 @@
 
   // ---- Turning pages ----------------------------------------------------
 
-  function next() { if (rendition) { userMoved(); rendition.next(); } }
-  function prev() { if (rendition) { userMoved(); rendition.prev(); } }
+  function next(why) { if (rendition) { dbg('turn next (' + (why || '?') + ')'); dbgWrap(); userMoved(); rendition.next(); } }
+  function prev(why) { if (rendition) { dbg('turn prev (' + (why || '?') + ')'); dbgWrap(); userMoved(); rendition.prev(); } }
+
+  /** Log the numbers epub.js weighs each time it decides where a turn goes. */
+  function dbgWrap() {
+    var m = DEBUG && rendition && rendition.manager;
+    if (!m || m.__dbg) { return; }
+    m.__dbg = true;
+    ['next', 'prev'].forEach(function (name) {
+      var orig = m[name];
+      m[name] = function () {
+        var g = dbgGeometry();
+        if (g) {
+          dbg('epub ' + name + ': left ' + g.left + ' + ow ' + g.ow + ' + delta ' + g.delta + ' = ' +
+            (g.left + g.ow + g.delta) + ' vs sw ' + g.sw + (name === 'next' && g.left + g.ow + g.delta > g.sw ? '  -> NEXT CHAPTER' : ''));
+        }
+        return orig.apply(m, arguments);
+      };
+    });
+  }
+
+  // ---- Diagnostics (only with ?debug=1 on the address) ------------------
+  //
+  // A small panel of the numbers epub.js uses to decide whether there is
+  // another page in a chapter, and a log of what happened just before. It
+  // exists to catch a fault on a device we can't run tests on; it does
+  // nothing at all unless asked for.
+
+  var DEBUG = /[?&]debug=1\b/.test(location.search);
+  var dbgLines = [];
+  var dbgT0 = Date.now();
+  function dbg(msg) {
+    if (!DEBUG) { return; }
+    var t = ((Date.now() - dbgT0) / 1000).toFixed(1);
+    dbgLines.push(t + 's ' + msg);
+    if (dbgLines.length > 14) { dbgLines.shift(); }
+    dbgPaint();
+  }
+  function dbgGeometry() {
+    var c = document.querySelector('#rd-viewer .epub-container');
+    var fr = document.querySelector('#rd-viewer iframe');
+    var lay = rendition && rendition.manager && rendition.manager.layout;
+    if (!c || !lay) { return null; }
+    var textRight = null;
+    try {
+      var d = fr.contentDocument, r = d.createRange();
+      r.selectNodeContents(d.body);
+      textRight = Math.round(r.getBoundingClientRect().right);
+    } catch (e) { /* frame not ready */ }
+    return {
+      left: c.scrollLeft, ow: c.offsetWidth, cw: c.clientWidth, sw: c.scrollWidth,
+      delta: lay.delta, pageW: lay.pageWidth, cols: lay.divisor,
+      frameW: fr ? Math.round(fr.getBoundingClientRect().width * 100) / 100 : null,
+      frameCss: fr ? fr.style.width : null, textRight: textRight
+    };
+  }
+  function dbgPaint() {
+    if (!DEBUG) { return; }
+    var el = $('rd-debug');
+    if (!el) {
+      el = document.createElement('pre');
+      el.id = 'rd-debug';
+      el.style.cssText = 'position:fixed;left:6px;bottom:30px;z-index:99;margin:0;padding:6px 8px;max-width:min(560px,94vw);' +
+        'font:11px/1.35 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;background:rgba(0,0,0,.78);color:#e8f0e8;' +
+        'border-radius:6px;pointer-events:none';
+      document.body.appendChild(el);
+    }
+    var g = dbgGeometry();
+    var loc = lastLocation && lastLocation.start;
+    var vv = window.visualViewport;
+    var head = [
+      'page ' + (loc ? loc.displayed.page + '/' + loc.displayed.total + '  ' + String(loc.href).replace(/^.*\//, '') : '-'),
+      g ? 'left ' + g.left + '  ow ' + g.ow + '  cw ' + g.cw + '  delta ' + g.delta + '  sw ' + g.sw : '',
+      g ? 'next turn: ' + (g.left + g.ow + g.delta) + ' vs ' + g.sw + ' -> ' + (g.left + g.ow + g.delta <= g.sw ? 'next page here' : 'next chapter') : '',
+      g ? 'frame ' + g.frameW + ' (' + g.frameCss + ')  text to ' + g.textRight + '  pageW ' + g.pageW + '  x' + g.cols : '',
+      'viewer ' + $('rd-viewer').clientWidth + 'x' + $('rd-viewer').clientHeight + '  dpr ' + window.devicePixelRatio +
+        (vv ? '  vv ' + Math.round(vv.width) + 'x' + Math.round(vv.height) + ' @' + vv.scale.toFixed(2) : '') +
+        '  ' + settings.pages + '/' + settings.font + '/' + settings.size + '%',
+      '----'
+    ];
+    el.textContent = head.join('\n') + '\n' + dbgLines.join('\n');
+  }
 
   function onKey(e) {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) { return; }
@@ -851,8 +933,8 @@
     }
     if (e.key === 'b' || e.key === 'B') { e.preventDefault(); toggleMark(); return; }
     if ((e.key === 'f' || e.key === 'F') && canFull) { e.preventDefault(); toggleFull(); return; }
-    if (e.key === 'ArrowRight' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey)) { e.preventDefault(); next(); }
-    else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || (e.key === ' ' && e.shiftKey)) { e.preventDefault(); prev(); }
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey)) { e.preventDefault(); next('key'); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || (e.key === ' ' && e.shiftKey)) { e.preventDefault(); prev('key'); }
   }
 
   /** Taps near the edges and sideways swipes inside the book turn the page. */
@@ -880,7 +962,7 @@
       var selecting = touch.sel || hasSelection();
       if (!selecting && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5 && Date.now() - touch.t < 800) {
         swiped = true;
-        if (dx < 0) { next(); } else { prev(); }
+        if (dx < 0) { next('swipe ' + Math.round(dx) + 'px'); } else { prev('swipe ' + Math.round(dx) + 'px'); }
       }
       touch = null;
     });
@@ -895,8 +977,8 @@
       var frame = doc.defaultView && doc.defaultView.frameElement;
       var viewer = $('rd-viewer').getBoundingClientRect();
       var x = (frame ? frame.getBoundingClientRect().left : 0) + e.clientX - viewer.left;
-      if (x < viewer.width * 0.25) { prev(); }
-      else if (x > viewer.width * 0.75) { next(); }
+      if (x < viewer.width * 0.25) { prev('tap'); }
+      else if (x > viewer.width * 0.75) { next('tap'); }
     });
   }
 
@@ -957,7 +1039,9 @@
       });
       rendition.on('selected', onSelected);
       rendition.on('relocated', function (loc) {
+        dbg('at ' + loc.start.displayed.page + '/' + loc.start.displayed.total + ' ' + String(loc.start.href).replace(/^.*\//, ''));
         lastLocation = loc;
+        dbgPaint();
         hideSelBar();
         showWhere(loc);
         savePosition(loc);
@@ -990,7 +1074,11 @@
   // the screen in full screen on Android, which hides the bottom line.
   function fitHeight() {
     var h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-    if (h > 0) { document.documentElement.style.setProperty('--rd-h', Math.floor(h) + 'px'); }
+    if (h > 0) {
+      var was = document.documentElement.style.getPropertyValue('--rd-h');
+      document.documentElement.style.setProperty('--rd-h', Math.floor(h) + 'px');
+      if (was && was !== Math.floor(h) + 'px') { dbg('screen height ' + was + ' -> ' + Math.floor(h) + 'px'); }
+    }
   }
   fitHeight();
   window.addEventListener('resize', fitHeight);
@@ -1008,6 +1096,7 @@
       var box = v.clientWidth + 'x' + v.clientHeight;
       if (!rendition || !lastLocation) { return; }
       if (box === lastBox) { checkFit(); return; }
+      dbg('refit: area ' + lastBox + ' -> ' + box);
       lastBox = box;
       var spot = anchorCfi();
       rendition.resize(undefined, undefined, spot);
@@ -1043,6 +1132,12 @@
     if (heals.length >= 3) { return; }
     heals.push(t);
     healing = true;
+    if (DEBUG) {
+      var fr = $('rd-viewer').querySelector('iframe');
+      dbg('forceRelayout: frame h ' + (fr ? Math.round(fr.getBoundingClientRect().height * 10) / 10 : '-') +
+        ' vs area h ' + $('rd-viewer').clientHeight + ', frame top off ' +
+        (fr ? Math.round((fr.getBoundingClientRect().top - $('rd-viewer').getBoundingClientRect().top) * 10) / 10 : '-'));
+    }
     if (rendition.manager) { rendition.manager._stageSize = undefined; }
     lastBox = $('rd-viewer').clientWidth + 'x' + $('rd-viewer').clientHeight;
     var spot = anchorCfi();
@@ -1101,8 +1196,8 @@
 
   // ---- Controls ---------------------------------------------------------
 
-  $('rd-prev').addEventListener('click', prev);
-  $('rd-next').addEventListener('click', next);
+  $('rd-prev').addEventListener('click', function () { prev('button'); });
+  $('rd-next').addEventListener('click', function () { next('button'); });
   $('rd-toc-btn').addEventListener('click', function () { togglePanel('rd-toc-btn', 'rd-toc'); });
   $('rd-mark-btn').addEventListener('click', function () { closePanels(); toggleMark(); });
   TABS.forEach(function (t) {
