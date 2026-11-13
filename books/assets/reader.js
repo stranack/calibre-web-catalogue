@@ -202,7 +202,29 @@
     setTimeout(go, 500);
   }
 
-  /** Re-lay the book after a change that alters how much fits on a page. */
+  /**
+   * A chapter is measured - how many pages it runs to - the moment it's laid
+   * out, and at that moment Literata or Public Sans may not have arrived yet,
+   * so the measuring is done in the fallback font. When the real font lands
+   * the text reflows, usually a little wider, and can spill onto a page the
+   * chapter was never given: that page can't be reached, and turning from
+   * what looks like the last page goes straight to the next chapter.
+   *
+   * epub.js does re-measure once the chapter's fonts are ready, but it asks
+   * before our font stylesheet is even on the page, so the answer comes back
+   * "ready" with nothing loading. Listening for each font finishing instead
+   * catches the real arrival, whenever it comes.
+   */
+  function remeasureWhenFontsArrive(contents) {
+    var doc = contents.document;
+    var fonts = doc && doc.fonts;
+    if (!fonts || !fonts.addEventListener) { return; }
+    fonts.addEventListener('loadingdone', function () {
+      if (contents.document) { contents.expand(); }
+    });
+  }
+
+  /** Re-lay the book after a change that alters how much fits on a page. */  /** Re-lay the book after a change that alters how much fits on a page. */
   function relayout(anchor) {
     if (!rendition) { return; }
     var cfi = anchor || anchorCfi();
@@ -931,7 +953,7 @@
         contents.addStylesheet(FONT_CSS);
         styleContents(contents);
         wireInput(contents);
-
+        remeasureWhenFontsArrive(contents);
       });
       rendition.on('selected', onSelected);
       rendition.on('relocated', function (loc) {
