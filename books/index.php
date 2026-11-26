@@ -78,22 +78,14 @@ if ($f['q'] !== '') {
 $stats = $cat->stats();
 
 if (!$filtered) {
-    page_top('', ['search' => false, 'class' => 'home']);
+    page_top('', ['class' => 'home']);
     $recent = $cat->recent(18);
     $opened = is_owner() ? recently_opened(18) : [];
     $openedBooks = $opened ? $cat->byIds(array_keys($opened)) : [];
     $finishedCount = is_owner() ? count(finished_books()) : 0;
     $topSubjects = $cat->topSubjects(16);
     ?>
-  <section class="hero">
-    <h1 class="hero-title"><?= h(cfg('site_title')) ?></h1>
-    <p class="hero-sub"><?= number_format($stats['books']) ?> books by <?= number_format($stats['authors']) ?> authors</p>
-    <form class="search search-hero" action="index.php" method="get" role="search">
-      <label class="visually-hidden" for="q-hero">Search the library</label>
-      <input id="q-hero" name="q" type="search" placeholder="Search titles, authors, subjects" autocomplete="off">
-      <button type="submit"><?= search_icon() ?><span>Search</span></button>
-    </form>
-  </section>
+  <h1 class="visually-hidden"><?= h(cfg('site_title')) ?></h1>
 
   <?php if ($openedBooks || $finishedCount): ?>
   <section class="shelf" aria-labelledby="opened-h">
@@ -137,7 +129,7 @@ if (!$filtered) {
 
   <section class="results" aria-labelledby="all-h">
     <div class="section-head">
-      <h2 id="all-h">All books</h2>
+      <h2 id="all-h">All books <span class="head-count"><?= number_format($stats['books']) ?> books by <?= number_format($stats['authors']) ?> authors</span></h2>
       <?php read_toggle($params, ''); ?>
       <?php sort_form($sorts, $sort, $f); ?>
     </div>

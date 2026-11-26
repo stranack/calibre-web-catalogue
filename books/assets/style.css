@@ -149,6 +149,8 @@ main { max-width: var(--wrap); margin: 0 auto; padding: 0 var(--gutter) 64px; }
 .section-head > a:hover { text-decoration: underline; }
 .shelf, .subjects-home, .results, .browse { margin-top: 44px; }
 .home .shelf { margin-top: 8px; }
+.home main > .shelf:first-of-type, .home main > h1 + section { margin-top: 28px; }
+.head-count { margin-left: 10px; color: var(--muted); font: 400 0.95rem var(--sans); white-space: nowrap; }
 
 /* ---- Cards ---------------------------------------------------------- */
 
@@ -404,6 +406,13 @@ a.btn { display: inline-block; text-decoration: none; }
 .link-btn { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
 
 /* ---- Small screens -------------------------------------------------- */
+
+/* Not wide enough for the name, search and links on one line (a tablet held
+   upright): the search box takes a row of its own under them. */
+@media (max-width: 940px) {
+  .masthead-inner { flex-wrap: wrap; gap: 8px 12px; }
+  .search-compact { order: 3; flex-basis: 100%; max-width: none; }
+}
 
 @media (max-width: 760px) {
   .masthead-inner { flex-wrap: wrap; gap: 8px 12px; }
