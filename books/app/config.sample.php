@@ -59,4 +59,8 @@ return [
     // Advanced: keep data (the downloaded catalogue, sync state and Dropbox
     // token) outside the website folder. Leave empty to use books/data/.
     'data_dir' => '',
+    // "Suggested reading" on the home page: books near your library's
+    // authors and subjects that aren't in it, found in Open Library during
+    // the sync. Set to false to turn the section off.
+    'suggestions' => true,
 ];

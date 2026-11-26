@@ -84,6 +84,7 @@ if (!$filtered) {
     $openedBooks = $opened ? $cat->byIds(array_keys($opened)) : [];
     $finishedCount = is_owner() ? count(finished_books()) : 0;
     $topSubjects = $cat->topSubjects(16);
+    $suggested = suggestions_for_today();
     ?>
   <h1 class="visually-hidden"><?= h(cfg('site_title')) ?></h1>
 
@@ -113,6 +114,18 @@ if (!$filtered) {
     </div>
   </section>
 
+  <?php if ($suggested): ?>
+  <section class="shelf shelf-suggest" aria-labelledby="suggest-h">
+    <div class="section-head">
+      <h2 id="suggest-h">Suggested reading</h2>
+      <p class="section-note">Not in the library yet. Picked from <a href="https://openlibrary.org">Open Library</a> by the authors and subjects here; links go to Amazon.ca.</p>
+    </div>
+    <div class="shelf-track">
+      <ul class="shelf-row"><?php foreach ($suggested as $p) echo suggestion_card($p); ?></ul>
+    </div>
+  </section>
+
+  <?php endif; ?>
   <?php if ($topSubjects): ?>
   <section class="subjects-home" aria-labelledby="subj-h">
     <div class="section-head">

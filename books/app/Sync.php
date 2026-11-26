@@ -128,6 +128,23 @@ final class Sync
                 write_state($state);
             }
 
+            // 4. Suggested reading, with whatever time is left. A failure
+            // here (Open Library down, say) never fails the sync.
+            if (cfg('suggestions', true)) {
+                try {
+                    $db = new PDO('sqlite:' . LIBRARY_DB, null, null, [
+                        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                        PDO::SQLITE_ATTR_OPEN_FLAGS => PDO::SQLITE_OPEN_READONLY,
+                    ]);
+                    $state['suggestions'] = refresh_suggestions($db, $started + $budgetSeconds, fn(string $m) => $this->say($m)) + ['at' => date('c'), 'error' => null];
+                } catch (Throwable $e) {
+                    $state['suggestions'] = ['at' => date('c'), 'error' => $e->getMessage()] + (array) ($state['suggestions'] ?? []);
+                    $this->say('Suggested reading skipped: ' . $e->getMessage());
+                } finally {
+                    $db = null;
+                }
+            }
+
             $summary['pending'] = count($todo);
             $state['covers'] = $have;
             $state['failed'] = $failed;

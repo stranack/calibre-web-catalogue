@@ -180,6 +180,11 @@ main { max-width: var(--wrap); margin: 0 auto; padding: 0 var(--gutter) 64px; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .card-series { font-size: 0.78rem; }
+.card-reason {
+  display: block; margin-top: 4px; font-size: 0.76rem; color: var(--accent);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.section-note { flex-basis: 100%; margin: -10px 0 0; color: var(--muted); font-size: 0.88rem; }
 .card-progress { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.78rem; line-height: 1.35; margin-top: 2px; }
 .card-meter { flex: 1; max-width: 64px; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; }
 .card-meter span { display: block; height: 100%; background: var(--accent); }

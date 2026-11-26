@@ -21,6 +21,7 @@ $GLOBALS['CONFIG'] = [
     'local_library_path'   => '',
     'data_dir'             => '',
     'timezone'             => 'UTC',
+    'suggestions'          => true,
 ];
 
 $configFile = APP_DIR . '/config.php';
@@ -46,3 +47,4 @@ require APP_DIR . '/Sources.php';
 require APP_DIR . '/SqliteFileReader.php';
 require APP_DIR . '/Sync.php';
 require APP_DIR . '/Reading.php';
+require APP_DIR . '/Suggestions.php';

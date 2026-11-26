@@ -131,6 +131,8 @@ page_top('Admin', ['search' => false, 'noindex' => true, 'class' => 'admin']);
         <div><dt>Covers on site</dt><dd><?= number_format($coverCount) ?><?php if (!empty($state['pending'])): ?> (<?= (int) $state['pending'] ?> still to fetch)<?php endif; ?><?php if (!empty($state['failed'])): ?>, <?= count($state['failed']) ?> unavailable in Dropbox<?php endif; ?></dd></div>
         <div><dt>Last checked</dt><dd><?= !empty($state['last_check']) ? h(date('M j, Y g:i a', strtotime($state['last_check']))) : 'Never' ?></dd></div>
         <div><dt>Catalogue changed</dt><dd><?= !empty($state['last_change']) ? h(date('M j, Y g:i a', strtotime($state['last_change']))) : 'Never' ?></dd></div>
+        <?php $sg = $state['suggestions'] ?? null; ?>
+        <div><dt>Suggested reading</dt><dd><?php if (!cfg('suggestions', true)): ?>Off<?php elseif (!$sg): ?>Not built yet (the next sync starts it)<?php else: ?><?= number_format((int) ($sg['picks'] ?? 0)) ?> books from Open Library<?php if (!empty($sg['pending'])): ?>, <?= (int) $sg['pending'] ?> lookups still to do<?php endif; ?><?php if (!empty($sg['failed'])): ?>, <?= (int) $sg['failed'] ?> failed last run<?php endif; ?><?php if (!empty($sg['error'])): ?> <span class="err">(<?= h($sg['error']) ?>)</span><?php endif; ?><?php endif; ?></dd></div>
         <?php if (!empty($state['last_error'])): ?><div><dt>Last error</dt><dd class="err"><?= h($state['last_error']) ?></dd></div><?php endif; ?>
         <?php $dl = (string) cfg('dropbox_links', 'owner'); ?>
         <div><dt>Dropbox links</dt><dd><?= $dl === 'off' ? 'Off' : ($dl === 'everyone' ? 'Shown to every visitor' : (is_owner() ? 'Shown on this browser (you are signed in)' : 'Shown only to you, once you sign in on this browser')) ?></dd></div>
