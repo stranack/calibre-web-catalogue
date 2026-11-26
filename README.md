@@ -28,6 +28,9 @@ The server's own SQLite version doesn't matter. Calibre's `metadata.db` uses tab
 tools/               optional library maintenance scripts (not uploaded)
 books/               upload this folder to your web space
   index.php          home page, search and filtered lists
+  manifest.php       web app manifest, so the site installs as an app
+  sw.js              service worker: saved pages for speed and offline use
+  offline.html       shown offline for pages that aren't saved
   book.php           book detail page
   browse.php         authors, subjects and series lists
   admin.php          connect Dropbox, run a sync, check status
@@ -125,6 +128,16 @@ Turning to the last page of a book marks it as **read**. The book page then show
 The reader saves your place, bookmarks and settings on the site (in `data/reading.json`), so you can stop on the tablet and carry on from the computer. The book page then says **Continue reading** and how far through you are. Other visitors can't open the reader.
 
 The reader uses [epub.js](https://github.com/futurepress/epub.js) and [JSZip](https://github.com/Stuk/jszip), kept in `assets/vendor/` with their licences.
+
+## Installing as an app, and reading offline
+
+The site can be installed as an app. In Chrome on Android, open the library, tap the **⋮** menu and choose **Add to Home screen** (or **Install app**). The app opens full screen, with no address bar or tabs, so there's no need for the reader's Full screen button. It needs the site on `https`, which a service worker requires.
+
+The service worker (`sw.js`) keeps copies of the pages, styles, scripts, fonts and covers you've used, so they open quickly and still open with no connection. The reader keeps each book you open on the device, tied to the book's version in Calibre, so it opens next time without waiting for Dropbox, and opens offline. The 30 most recently opened books are kept; older ones are dropped. Offline, a page that isn't saved shows `offline.html`, which lists the books you can still read.
+
+Your place, bookmarks, notes and settings saved while offline wait on the device and go to the site, in order, once the connection is back. A browser that's signed out drops its saved books and reader pages the next time it opens the site online.
+
+In the browser (not installed), going to another page always ends full screen; that's the browser's rule. If you were reading full screen, your first tap when you come back to the book puts it back.
 
 ## Downloading to a reading app
 

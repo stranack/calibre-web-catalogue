@@ -384,6 +384,21 @@ function pagination(int $total, int $page, int $perPage, callable $linkFor): str
     return $html . '</nav>';
 }
 
+/**
+ * What makes the site installable as an app: the manifest, home-screen
+ * icons, the bar colour, and the script that registers the service worker.
+ * Shared by page_top() and the reader page.
+ */
+function app_head_tags(): string
+{
+    $v = h((string) @filemtime(APP_ROOT . '/assets/app.js'));
+    return '<link rel="manifest" href="manifest.php">' . "\n"
+        . '<meta name="theme-color" content="#1f6a58">' . "\n"
+        . '<meta name="mobile-web-app-capable" content="yes">' . "\n"
+        . '<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">' . "\n"
+        . '<script src="assets/app.js?v=' . $v . '" defer></script>';
+}
+
 function page_top(string $title, array $opts = []): void
 {
     $site = (string) cfg('site_title', 'Library');
@@ -394,7 +409,7 @@ function page_top(string $title, array $opts = []): void
     $bodyClass = $opts['class'] ?? '';
     ?>
 <!doctype html>
-<html lang="en">
+<html lang="en" data-owner="<?= is_owner() ? '1' : '0' ?>">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -407,6 +422,7 @@ function page_top(string $title, array $opts = []): void
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600&family=Public+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="assets/style.css?v=<?= h((string) @filemtime(APP_ROOT . '/assets/style.css')) ?>">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<?= app_head_tags() ?>
 </head>
 <body class="<?= h($bodyClass) ?>">
 <a class="skip" href="#main">Skip to content</a>

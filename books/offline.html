@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Offline</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<style>
+  .offline { max-width: 40rem; margin: 3rem auto; padding: 0 1.25rem; }
+  .offline h1 { margin-bottom: .5rem; }
+  .offline ul { list-style: none; padding: 0; margin: 1.5rem 0; }
+  .offline li { padding: .75rem 0; border-bottom: 1px solid var(--rule, #dbe2e0); }
+  .offline li a { font-weight: 600; }
+  .offline .when { display: block; color: var(--muted, #5d6b69); font-size: .9rem; }
+</style>
+</head>
+<body>
+<main id="main" class="offline">
+  <h1>You're offline</h1>
+  <p>This page isn't saved on this device. The books you've opened recently are, and you can keep reading them here.</p>
+  <ul id="kept"></ul>
+  <p id="none" hidden>No books are saved on this device yet. Open a book in the reader while you're online and it's kept for next time.</p>
+  <p><a href="index.php">Try the library again</a></p>
+</main>
+<script>
+(function () {
+  var list = [];
+  try { list = JSON.parse(localStorage.getItem('hl-offline') || '[]'); } catch (e) { list = []; }
+  list.sort(function (a, b) { return (b.when || 0) - (a.when || 0); });
+  var ul = document.getElementById('kept');
+  list.forEach(function (b) {
+    var li = document.createElement('li');
+    var a = document.createElement('a');
+    a.href = 'read.php?id=' + encodeURIComponent(b.id);
+    a.textContent = b.title || ('Book ' + b.id);
+    li.appendChild(a);
+    if (b.when) {
+      var s = document.createElement('span');
+      s.className = 'when';
+      s.textContent = 'Last opened ' + new Date(b.when).toLocaleDateString();
+      li.appendChild(s);
+    }
+    ul.appendChild(li);
+  });
+  document.getElementById('none').hidden = list.length > 0;
+})();
+</script>
+</body>
+</html>

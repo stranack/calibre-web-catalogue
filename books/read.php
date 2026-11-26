@@ -51,12 +51,15 @@ $config = [
     'notes'    => book_notes((int) $b['id']),
     'maxNote'  => MAX_NOTE_CHARS,
     'finished' => isset(finished_books()[(int) $b['id']]),
+    // When this page was made, so a copy saved for offline reading can tell
+    // whether the device has newer bookmarks or notes than it does.
+    'served'   => date('c'),
 ];
 $v = fn(string $f) => h((string) @filemtime(APP_ROOT . '/' . $f));
 $theme = $data['settings']['theme'];
 ?>
 <!doctype html>
-<html lang="en" data-reader-theme="<?= h($theme) ?>">
+<html lang="en" data-owner="1" data-reader-theme="<?= h($theme) ?>">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -67,6 +70,7 @@ $theme = $data['settings']['theme'];
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Public+Sans:ital,wght@0,400;0,600;1,400&display=swap">
 <link rel="stylesheet" href="assets/reader.css?v=<?= $v('assets/reader.css') ?>">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<?= app_head_tags() ?>
 </head>
 <body class="reader">
 <header class="rd-bar">

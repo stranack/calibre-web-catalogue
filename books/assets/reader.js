@@ -254,21 +254,120 @@
 
   // ---- Saving -----------------------------------------------------------
 
-  function post(body, keepalive) {
+  // Every save goes to reading.php. One that can't get there (offline, or
+  // the server didn't answer) waits in an outbox on this device and is sent
+  // again, in order, once the connection is back. All the saves are safe to
+  // repeat, so one that did arrive but lost its reply does no harm.
+  var OUTBOX = 'hl-outbox';
+  var MAX_OUTBOX = 400;
+
+  function readStore(key, fallback) {
+    try {
+      var v = JSON.parse(localStorage.getItem(key) || 'null');
+      return v === null ? fallback : v;
+    } catch (e) { return fallback; }
+  }
+  function writeStore(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch (e) { return false; }
+  }
+
+  /** A save of only where you are (or only settings) replaces an older one of the same kind. */
+  function outboxKind(body) {
+    if (body.settings) { return 'settings'; }
+    var keys = Object.keys(body).filter(function (k) { return k !== 'id'; }).sort().join(',');
+    return keys === 'cfi,pct' ? 'pos-' + body.id : null;
+  }
+
+  function queue(body) {
+    var box = readStore(OUTBOX, []);
+    var kind = outboxKind(body);
+    if (kind) { box = box.filter(function (b) { return outboxKind(b) !== kind; }); }
+    box.push(body);
+    writeStore(OUTBOX, box.slice(-MAX_OUTBOX));
+  }
+
+  function send(body, keepalive) {
     return fetch(cfg.saveUrl, {
       method: 'POST',
       credentials: 'same-origin',
       keepalive: !!keepalive,
       headers: { 'Content-Type': 'application/json', 'X-Library-Reader': '1' },
       body: JSON.stringify(body)
-    }).catch(function () { /* offline: the next page turn tries again */ });
+    });
   }
+
+  var flushing = false;
+  function flushOutbox() {
+    if (flushing || !navigator.onLine) { return; }
+    var box = readStore(OUTBOX, []);
+    if (!box.length) { return; }
+    flushing = true;
+    var body = box[0];
+    send(body).then(function (res) {
+      // 5xx: the server is having trouble, so try later. Anything else
+      // (saved, or refused as not making sense) is done with.
+      if (res.status >= 500) { throw new Error('server'); }
+      var now = readStore(OUTBOX, []);
+      if (now.length && JSON.stringify(now[0]) === JSON.stringify(body)) { now.shift(); }
+      writeStore(OUTBOX, now);
+      flushing = false;
+      flushOutbox();
+    }).catch(function () { flushing = false; });
+  }
+
+  function post(body, keepalive) {
+    // Older saves go first, so a newer one is never overtaken by them.
+    if (readStore(OUTBOX, []).length) {
+      queue(body);
+      flushOutbox();
+      return Promise.resolve(undefined);
+    }
+    return send(body, keepalive).then(function (res) {
+      if (res.status >= 500) { queue(body); }
+      return res;
+    }).catch(function () {
+      queue(body);
+      return undefined;
+    });
+  }
+
+  // ---- Copies kept on this device ---------------------------------------
+
+  // Your place, bookmarks and notes for this book, as they stand on this
+  // device. A reader page opened from the offline copy carries whatever was
+  // true when it was saved, so these let it pick up anything newer.
+  function posKey() { return 'hl-pos-' + cfg.id; }
+  function listsKey() { return 'hl-book-' + cfg.id; }
+  function rememberPosition(cfi, pct) {
+    writeStore(posKey(), { cfi: cfi, pct: pct, at: Date.now() });
+  }
+  function rememberLists() {
+    writeStore(listsKey(), { bookmarks: bookmarks, notes: notes, at: Date.now() });
+  }
+  function when(iso) { var t = Date.parse(iso || ''); return isNaN(t) ? 0 : t; }
+
+  (function preferNewerLocalCopies() {
+    // Online with nothing waiting to be sent, the page is fresh from the
+    // server and has everything, including what other devices saved.
+    var waiting = readStore(OUTBOX, []).some(function (b) { return b.id === cfg.id; });
+    if (navigator.onLine && !waiting) { return; }
+    var pos = readStore(posKey(), null);
+    if (pos && pos.cfi && pos.at > when(cfg.position && cfg.position.updated)) {
+      cfg.position = { cfi: pos.cfi, pct: pos.pct, updated: new Date(pos.at).toISOString() };
+    }
+    var lists = readStore(listsKey(), null);
+    if (lists && lists.at > when(cfg.served)) {
+      if (Array.isArray(lists.bookmarks)) { bookmarks = lists.bookmarks.slice(); }
+      if (Array.isArray(lists.notes)) { notes = lists.notes.slice(); }
+    }
+  })();
 
   var saveTimer = null;
   var pending = null;
   function savePosition(loc) {
     if (!loc || !loc.start || !loc.start.cfi) { return; }
     pending = { id: cfg.id, cfi: loc.start.cfi, pct: percentFor(loc) };
+    rememberPosition(pending.cfi, pending.pct);
     clearTimeout(saveTimer);
     saveTimer = setTimeout(flushPosition, 1200);
   }
@@ -484,6 +583,7 @@
   }
 
   function renderMarks() {
+    rememberLists();
     var list = $('rd-marks-list');
     // Furthest into the book first, so the place you most recently
     // bookmarked is at the top of the list rather than buried under the
@@ -610,7 +710,7 @@
     renderNotes();
     if (had) { redrawNote(cfiRange); } else { drawNote(n); }
     return saveNote({ note: n }).then(function (data) {
-      if (!data) { toast('Saved on this device only - the note didn\'t reach the server.'); }
+      if (!data) { toast('Saved on this device. It goes to the server when you\'re back online.'); }
       else { redrawNote(cfiRange); }
     });
   }
@@ -707,6 +807,7 @@
   // ---- The notes list ---------------------------------------------------
 
   function renderNotes() {
+    rememberLists();
     var list = $('rd-notes-list');
     // Furthest into the book first, to match the bookmarks list.
     var sorted = notes.slice().sort(function (a, b) { return cfiCompare(b.cfi, a.cfi); });
@@ -954,6 +1055,7 @@
 
   function onKey(e) {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) { return; }
+    if (e.key !== 'Escape' && $('rd-noteedit').hidden && !panelsOpen() && resumeFull()) { e.preventDefault(); return; }
     if (e.key === 'Escape') {
       if (!$('rd-noteedit').hidden) { closeNoteEditor(); dropSelection(); return; }
       if (!$('rd-selacts').hidden) { dropSelection(); hideSelBar(); return; }
@@ -1002,6 +1104,7 @@
     });
     doc.addEventListener('click', function (e) {
       if (swiped) { swiped = false; return; }
+      if (!(e.target.closest && e.target.closest('a[href]')) && !hasSelection() && resumeFull()) { return; }
       if (panelsOpen()) { closePanels(); return; }
       if (e.target.closest && e.target.closest('a[href]')) { return; }
       if (hasSelection()) { return; }
@@ -1047,16 +1150,94 @@
 
   // ---- Opening the book -------------------------------------------------
 
-  function open() {
-    if (typeof ePub !== 'function') { failed('The reader didn\'t load.'); return; }
-    status('Opening the book…');
-    fetch(cfg.fileUrl, { credentials: 'same-origin' }).then(function (res) {
+  // ---- Books kept on this device ----------------------------------------
+
+  // Each book you open is kept in the browser's storage (the "hl-books"
+  // cache), so it opens at once next time, and with no connection. The copy
+  // is tied to the book's version, so a book changed in Calibre is fetched
+  // fresh. The oldest go once more than MAX_KEPT are kept.
+  var BOOKS = 'hl-books';
+  var MAX_KEPT = 30;
+  var OFFLINE_LIST = 'hl-offline';
+
+  function keptUrl() {
+    return new URL(cfg.fileUrl + (cfg.fileUrl.indexOf('?') < 0 ? '?' : '&') + 'v=' + cfg.version, location.href).href;
+  }
+
+  function fetchBook() {
+    return fetch(cfg.fileUrl, { credentials: 'same-origin' }).then(function (res) {
       var type = res.headers.get('Content-Type') || '';
       if (!res.ok || type.indexOf('text/html') === 0) {
         throw new Error(res.status === 403 ? 'You\'re no longer signed in on this device.' : 'The book file couldn\'t be fetched from Dropbox.');
       }
       return res.arrayBuffer();
-    }).then(function (buffer) {
+    }, function () {
+      throw new Error(navigator.onLine
+        ? 'The book file couldn\'t be fetched from Dropbox.'
+        : 'You\'re offline, and this book isn\'t saved on this device yet.');
+    });
+  }
+
+  function keepBook(buffer) {
+    if (!window.caches) { return; }
+    var url = keptUrl();
+    var mine = new RegExp('[?&]id=' + cfg.id + '(&|$)');
+    caches.open(BOOKS).then(function (c) {
+      return c.put(url, new Response(buffer.slice(0), {
+        headers: { 'Content-Type': 'application/epub+zip', 'Content-Length': String(buffer.byteLength) }
+      })).then(function () {
+        // Earlier versions of this book are no use now.
+        return c.keys().then(function (keys) {
+          return Promise.all(keys.filter(function (k) { return mine.test(k.url) && k.url !== url; })
+            .map(function (k) { return c.delete(k); }));
+        });
+      });
+    }).then(trimKept).catch(function () { /* storage full or blocked: read from the server */ });
+    if (navigator.storage && navigator.storage.persist) {
+      // Ask the browser not to clear these when space runs low. It may say no.
+      navigator.storage.persist().catch(function () {});
+    }
+  }
+
+  /** Note this book as opened just now, for the offline page and for trimming. */
+  function listKept() {
+    var list = readStore(OFFLINE_LIST, []).filter(function (b) { return b.id !== cfg.id; });
+    list.push({ id: cfg.id, title: cfg.title, when: Date.now() });
+    writeStore(OFFLINE_LIST, list);
+  }
+
+  function trimKept() {
+    var list = readStore(OFFLINE_LIST, []).sort(function (a, b) { return (b.when || 0) - (a.when || 0); });
+    var keep = list.slice(0, MAX_KEPT);
+    var drop = list.slice(MAX_KEPT);
+    writeStore(OFFLINE_LIST, keep);
+    if (!drop.length) { return; }
+    return caches.open(BOOKS).then(function (c) {
+      return c.keys().then(function (keys) {
+        return Promise.all(keys.filter(function (k) {
+          return drop.some(function (b) { return new RegExp('[?&]id=' + b.id + '(&|$)').test(k.url); });
+        }).map(function (k) { return c.delete(k); }));
+      });
+    });
+  }
+
+  /** The book's bytes: the copy on this device if there is one, otherwise from the server. */
+  function loadBook() {
+    var saved = window.caches
+      ? caches.open(BOOKS).then(function (c) { return c.match(keptUrl()); }).catch(function () { return null; })
+      : Promise.resolve(null);
+    return saved.then(function (hit) {
+      if (hit) {
+        return hit.arrayBuffer().then(function (buf) { listKept(); return buf; });
+      }
+      return fetchBook().then(function (buf) { listKept(); keepBook(buf); return buf; });
+    });
+  }
+
+  function open() {
+    if (typeof ePub !== 'function') { failed('The reader didn\'t load.'); return; }
+    status('Opening the book…');
+    loadBook().then(function (buffer) {
       book = ePub(buffer);
       var s = spreadArgs();
       rendition = book.renderTo('rd-viewer', {
@@ -1196,22 +1377,48 @@
 
   // Phones' Safari can't put a page in full screen, so the button only
   // appears where the browser supports it (desktop browsers, Android, iPad).
+  // Installed as an app, the library already opens full screen, so there's
+  // nothing for the button to do.
   var root = document.documentElement;
-  var canFull = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+  var asApp = !!(window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches);
+  var canFull = !asApp && !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+
+  // Browsers leave full screen whenever you go to another page, and only let
+  // a page go back into it from a tap or key press. So the reader remembers
+  // that you were reading full screen, and your first tap on coming back
+  // returns there (and does nothing else).
+  var FULL_KEY = 'hl-full';
+  var leaving = false;
+  var wantFull = canFull && readStore(FULL_KEY, false) === true;
 
   function isFull() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
 
+  function enterFull() {
+    var go = root.requestFullscreen || root.webkitRequestFullscreen;
+    var r = go.call(root);
+    if (r && r.catch) { r.catch(function () { /* refused, e.g. not from a tap */ }); }
+  }
+
   function toggleFull() {
     if (isFull()) {
+      wantFull = false;
+      writeStore(FULL_KEY, false);
       (document.exitFullscreen || document.webkitExitFullscreen).call(document);
     } else {
-      var go = root.requestFullscreen || root.webkitRequestFullscreen;
-      var r = go.call(root);
-      if (r && r.catch) { r.catch(function () { /* refused, e.g. not from a tap */ }); }
+      wantFull = true;
+      writeStore(FULL_KEY, true);
+      enterFull();
     }
   }
 
-  function showFull() {
+  /** On the first tap or key after coming back, go full screen again. True if it did. */
+  function resumeFull() {
+    if (!wantFull || isFull() || leaving) { return false; }
+    enterFull();
+    return true;
+  }
+
+  function showFull(e) {
     var on = isFull();
     $('rd-full-btn').setAttribute('aria-pressed', String(on));
     $('rd-full-btn').setAttribute('aria-label', on ? 'Leave full screen' : 'Full screen');
@@ -1219,6 +1426,17 @@
     root.classList.toggle('is-full', on);
     fitHeight();
     [100, 400, 900].forEach(function (ms) { setTimeout(function () { fitHeight(); refit(); }, ms); });
+    if (e && !on && wantFull) {
+      // Left full screen without the button. Going to another page (or
+      // another app) keeps the wish; the back gesture or Esc while staying
+      // here means you'd rather not, so stop asking.
+      setTimeout(function () {
+        if (!leaving && document.visibilityState === 'visible' && !isFull()) {
+          wantFull = false;
+          writeStore(FULL_KEY, false);
+        }
+      }, 600);
+    }
   }
 
   if (canFull) {
@@ -1226,8 +1444,23 @@
     $('rd-full-btn').addEventListener('click', function () { closePanels(); toggleFull(); });
     document.addEventListener('fullscreenchange', showFull);
     document.addEventListener('webkitfullscreenchange', showFull);
+    // Taps on the page around the book (the turn buttons, the edges). Links
+    // still go where they lead; the header buttons still work too.
+    document.addEventListener('click', function (e) {
+      if (!wantFull || isFull()) { return; }
+      if (e.target.closest && e.target.closest('a[href], .rd-tool, .rd-panel, .rd-noteedit, #rd-selacts')) { return; }
+      if (resumeFull()) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
     showFull();
+    if (wantFull && !isFull()) {
+      setTimeout(function () { if (!isFull()) { toast('Tap the page to go back to full screen'); } }, 1200);
+    }
   }
+  document.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('a[href]')) { leaving = true; setTimeout(function () { leaving = false; }, 3000); }
+  }, true);
+  window.addEventListener('pagehide', function () { leaving = true; });
+  window.addEventListener('pageshow', function () { leaving = false; });
 
   // ---- Controls ---------------------------------------------------------
 
@@ -1312,9 +1545,11 @@
     if (document.visibilityState === 'hidden') { flushPosition(true); }
   });
   window.addEventListener('pagehide', function () { flushPosition(true); });
+  window.addEventListener('online', flushOutbox);
 
   syncControls();
   applyLook();
   renderMarks();
+  flushOutbox();
   open();
 })();
