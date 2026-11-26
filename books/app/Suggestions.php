@@ -41,7 +41,7 @@ function suggest_cover_base(): string
 }
 
 /** A GET with a short time limit. Returns [status, body]; status 0 on a network error. */
-function suggest_http_get(string $url, int $timeout = 15): array
+function suggest_http_get(string $url, int $timeout = 10): array
 {
     if (!function_exists('curl_init')) {
         return [0, ''];
@@ -376,8 +376,9 @@ function suggestions_for_today(): array
     }
     $data = json_decode((string) file_get_contents(SUGGEST_FILE), true);
     $picks = is_array($data['picks'] ?? null) ? $data['picks'] : [];
-    // Only those whose cover is saved here, so the shelf never shows gaps.
-    $picks = array_values(array_filter($picks, fn($p) => !empty($p['cover']) && is_file(suggest_cover_file((int) $p['cover']))));
+    // Every pick has an Open Library cover; it's shown from this site once
+    // saved here, and straight from Open Library until then.
+    $picks = array_values(array_filter($picks, fn($p) => !empty($p['cover'])));
     if (!$picks) {
         return [];
     }
@@ -419,7 +420,10 @@ function suggestion_url(array $p): string
 
 function suggestion_card(array $p): string
 {
-    $img = 'covers/suggest/' . (int) $p['cover'] . '.jpg';
+    $id = (int) $p['cover'];
+    $img = is_file(suggest_cover_file($id))
+        ? 'covers/suggest/' . $id . '.jpg'
+        : suggest_cover_base() . '/b/id/' . $id . '-M.jpg';
     return '<li class="card card-suggest"><a href="' . h(suggestion_url($p)) . '" target="_blank" rel="noopener noreferrer nofollow">'
         . '<span class="cover"><img src="' . h($img) . '" alt="" loading="lazy" decoding="async"></span>'
         . '<span class="card-title">' . h($p['title']) . '</span>'
