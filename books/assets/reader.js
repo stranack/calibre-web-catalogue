@@ -188,6 +188,46 @@
    * undo the turn - the page flips, then snaps back - so it only goes ahead
    * if nothing has moved since it was planned.
    */
+  /** Whether a spot in the book is on the page(s) showing now. Unsure counts as yes. */
+  function spotVisible(cfi) {
+    try {
+      var contents = rendition.getContents()[0];
+      var range = contents.range(cfi);
+      var node = range.startContainer;
+      var r = range;
+      if (node.nodeType === 3 && range.startOffset < node.length) {
+        r = contents.document.createRange();
+        r.setStart(node, range.startOffset);
+        r.setEnd(node, Math.min(node.length, range.startOffset + 1));
+      }
+      var box = r.getBoundingClientRect();
+      var scroller = $('rd-viewer').querySelector('.epub-container');
+      var from = scroller ? scroller.scrollLeft : 0;
+      var width = $('rd-viewer').clientWidth;
+      if (!box || (!box.width && !box.height && !box.left)) { return true; }
+      return box.left >= from - 2 && box.left < from + width - 1;
+    } catch (e) { return true; }
+  }
+
+  /**
+   * Opening the book, epub.js finds the saved place while the chapter is
+   * still being laid out, and on some screens (the tablet's 2.125 pixel
+   * density, two pages side by side) that lands a few pages early. Once
+   * things settle, check the saved spot is really on screen and go to it
+   * if not, unless you've already turned the page yourself.
+   */
+  function settleOnOpen(target) {
+    if (!target) { return; }
+    var planned = moves;
+    [350, 1200, 2500].forEach(function (ms) {
+      setTimeout(function () {
+        if (!rendition || moves !== planned || spotVisible(target)) { return; }
+        dbg('open: landed away from the saved place; going to it');
+        rendition.display(target);
+      }, ms);
+    });
+  }
+
   function returnTo(spot) {
     if (!spot) { return; }
     var done = false;
@@ -316,8 +356,10 @@
   }
 
   function post(body, keepalive) {
-    // Older saves go first, so a newer one is never overtaken by them.
-    if (readStore(OUTBOX, []).length) {
+    // Older saves go first, so a newer one is never overtaken by them. Your
+    // place is the exception: only the latest matters, and it has to go out
+    // at once (with keepalive) when the app is closing.
+    if (outboxKind(body) !== 'pos-' + body.id && readStore(OUTBOX, []).length) {
       queue(body);
       flushOutbox();
       return Promise.resolve(undefined);
@@ -338,23 +380,34 @@
   // true when it was saved, so these let it pick up anything newer.
   function posKey() { return 'hl-pos-' + cfg.id; }
   function listsKey() { return 'hl-book-' + cfg.id; }
+  // The latest place on this device, written the moment you turn a page,
+  // and marked synced once the site has it. Closing the app straight after
+  // a page turn can stop the save reaching the site; this copy still has it.
   function rememberPosition(cfi, pct) {
-    writeStore(posKey(), { cfi: cfi, pct: pct, at: Date.now() });
+    writeStore(posKey(), { cfi: cfi, pct: pct, at: Date.now(), synced: false });
+  }
+  function markPositionSynced(cfi) {
+    var p = readStore(posKey(), null);
+    if (p && p.cfi === cfi) { p.synced = true; writeStore(posKey(), p); }
   }
   function rememberLists() {
     writeStore(listsKey(), { bookmarks: bookmarks, notes: notes, at: Date.now() });
   }
   function when(iso) { var t = Date.parse(iso || ''); return isNaN(t) ? 0 : t; }
 
+  var resendPosition = false;
   (function preferNewerLocalCopies() {
+    // A place on this device the site never got, and newer than the site's
+    // (another device may have read on since), wins.
+    var pos = readStore(posKey(), null);
+    if (pos && pos.cfi && pos.synced === false && pos.at > when(cfg.position && cfg.position.updated)) {
+      cfg.position = { cfi: pos.cfi, pct: pos.pct, updated: new Date(pos.at).toISOString() };
+      resendPosition = true;
+    }
     // Online with nothing waiting to be sent, the page is fresh from the
     // server and has everything, including what other devices saved.
     var waiting = readStore(OUTBOX, []).some(function (b) { return b.id === cfg.id; });
     if (navigator.onLine && !waiting) { return; }
-    var pos = readStore(posKey(), null);
-    if (pos && pos.cfi && pos.at > when(cfg.position && cfg.position.updated)) {
-      cfg.position = { cfi: pos.cfi, pct: pos.pct, updated: new Date(pos.at).toISOString() };
-    }
     var lists = readStore(listsKey(), null);
     if (lists && lists.at > when(cfg.served)) {
       if (Array.isArray(lists.bookmarks)) { bookmarks = lists.bookmarks.slice(); }
@@ -364,19 +417,27 @@
 
   var saveTimer = null;
   var pending = null;
-  function savePosition(loc) {
+  /**
+   * Save where you are. The spot saved is the first full line on screen
+   * (the reading anchor), not epub.js's "start of page" marker: opening the
+   * book again at that marker lands a page or more early, because it often
+   * points into a paragraph that began on an earlier page.
+   */
+  function savePosition(loc, cfi) {
     if (!loc || !loc.start || !loc.start.cfi) { return; }
-    pending = { id: cfg.id, cfi: loc.start.cfi, pct: percentFor(loc) };
+    pending = { id: cfg.id, cfi: cfi || loc.start.cfi, pct: percentFor(loc) };
     rememberPosition(pending.cfi, pending.pct);
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(flushPosition, 1200);
+    saveTimer = setTimeout(flushPosition, 500);
   }
   function flushPosition(keepalive) {
     clearTimeout(saveTimer);
     if (!pending) { return; }
     var body = pending;
     pending = null;
-    post(body, keepalive);
+    post(body, keepalive).then(function (res) {
+      if (res && res.ok) { markPositionSynced(body.cfi); }
+    });
   }
 
   // Reaching the last page marks the book as read (once; the book page can undo it).
@@ -1253,26 +1314,42 @@
         remeasureWhenFontsArrive(contents);
       });
       rendition.on('selected', onSelected);
+      if (DEBUG) { window.__reader = { rendition: rendition, book: book }; }
       rendition.on('relocated', function (loc) {
         dbg('at ' + loc.start.displayed.page + '/' + loc.start.displayed.total + ' ' + String(loc.start.href).replace(/^.*\//, ''));
         lastLocation = loc;
         dbgPaint();
         hideSelBar();
         showWhere(loc);
-        savePosition(loc);
         noteFinished(loc);
         checkFit();
         if (noteNextPage) {
           noteNextPage = false;
           setTimeout(function () { if (!readingAnchor) { readingAnchor = findAnchor(); } }, 80);
         }
+        // Only a move you made is saved. Re-layouts on opening (fonts
+        // arriving, the screen settling) keep the same reading anchor, so
+        // they can't nudge the saved place backwards.
+        if (movedSinceOpen) {
+          setTimeout(function () {
+            if (lastLocation === loc) { savePosition(loc, anchorCfi()); }
+          }, 120);
+        }
       });
       book.loaded.navigation.then(function (nav) { buildToc(nav.toc); });
 
       var start = cfg.position && cfg.position.cfi ? cfg.position.cfi : undefined;
-      return rendition.display(start).catch(function () { return rendition.display(); });
+      // The saved place is the spot to keep through the re-layouts that
+      // follow opening, not whatever the first, possibly early, page shows.
+      if (start) { readingAnchor = start; }
+      return rendition.display(start).then(function () { settleOnOpen(start); }, function () { readingAnchor = null; return rendition.display(); });
     }).then(function () {
       status('');
+      if (resendPosition && cfg.position) {
+        // The site didn't get your last place from this device; send it now.
+        pending = { id: cfg.id, cfi: cfg.position.cfi, pct: cfg.position.pct };
+        flushPosition();
+      }
       $('rd-mark-btn').disabled = false;
       steadyScroll();
       lastBox = $('rd-viewer').clientWidth + 'x' + $('rd-viewer').clientHeight;
@@ -1541,10 +1618,18 @@
     if (e.target.closest('#rd-selacts')) { return; }
     if (panelsOpen() && !e.target.closest('.rd-panel, .rd-tool')) { closePanels(); }
   });
+  // Leaving or closing the app: save the place you're at right now, even if
+  // the page turned a moment ago and its save hadn't been made yet.
+  function saveNow() {
+    if (movedSinceOpen && lastLocation && lastLocation.start) {
+      savePosition(lastLocation, anchorCfi());
+    }
+    flushPosition(true);
+  }
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'hidden') { flushPosition(true); }
+    if (document.visibilityState === 'hidden') { saveNow(); }
   });
-  window.addEventListener('pagehide', function () { flushPosition(true); });
+  window.addEventListener('pagehide', saveNow);
   window.addEventListener('online', flushOutbox);
 
   syncControls();
