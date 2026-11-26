@@ -258,6 +258,11 @@ function suggest_pick(PDO $db, array $seeds, array $answers): array
     }
 
     $usable = function (array $d) use ($haveTitles): bool {
+        // Translated editions often carry both titles ("El invierno del
+        // mundo / Winter of the World"): skip those, they're never the one to buy.
+        if (str_contains($d['title'], ' / ')) {
+            return false;
+        }
         $t = suggest_norm_title($d['title']);
         return $t !== '' && !isset($haveTitles[$t]) && !empty($d['cover']) && $d['author'] !== ''
             && !preg_match(SUGGEST_SKIP_TITLE, $d['title']);
