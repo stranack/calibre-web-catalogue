@@ -6,7 +6,7 @@ name: Deploy to Bluehost
 on:
   push:
     branches: [main]
-    paths: ['books/**', '.cpanel.yml']
+    paths: ['books/**', '.cpanel.yml', '.github/workflows/deploy.yml']
   workflow_dispatch: {}
 
 jobs:
@@ -52,3 +52,28 @@ jobs:
             echo "::error::VersionControlDeployment::create did not report success"
             exit 1
           fi
+
+      # cPanel runs the copy in the background, so "success" above only means
+      # it was queued. Check the live site really has this commit's files.
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.ready == 'yes'
+      - name: Check the live site has the new files
+        if: steps.token.outputs.ready == 'yes'
+        run: |
+          ok=1
+          for f in assets/reader.js assets/app.js assets/style.css sw.js offline.html; do
+            want=$(sha256sum "books/$f" | cut -d' ' -f1)
+            got=""
+            for try in 1 2 3 4 5 6; do
+              got=$(curl -fsS "https://${CPANEL_HOST}/books/$f?nocache=$GITHUB_RUN_ID-$try" | sha256sum | cut -d' ' -f1) || got=""
+              [ "$got" = "$want" ] && break
+              sleep 10
+            done
+            if [ "$got" = "$want" ]; then echo "live: $f matches"; else echo "::error::live $f does not match this commit"; ok=0; fi
+          done
+          for p in index.php admin.php manifest.php; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://${CPANEL_HOST}/books/$p")
+            echo "$p -> HTTP $code"
+          done
+          [ $ok = 1 ]
+
