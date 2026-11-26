@@ -9,6 +9,7 @@ Once an hour the site checks whether Calibre's `metadata.db` has changed. When i
 - A home page with search, a "Recently added" shelf, subject shortcuts and a sortable grid of every book
 - Search across titles, authors, series, subjects (Calibre tags) and publishers, with results you can narrow by subject
 - A page for each book with its description and a catalogue record: publisher, date, language, ISBN (linked to Open Library, Google Books and WorldCat) and the date it was added
+- A **Suggested reading** shelf of books that aren't in the library but are close to it (newer books from your series authors, more by your authors, and well-known books on your main subjects), found in [Open Library](https://openlibrary.org) during the sync and linked to Amazon.ca. Turn it off with `'suggestions' => false` in `config.php`
 - A–Z lists of authors, subjects and series
 - Light and dark themes, and layouts that work on a phone
 - An admin page for connecting Dropbox, running a sync and checking status
