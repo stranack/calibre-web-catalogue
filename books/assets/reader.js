@@ -56,11 +56,62 @@
 
   // ---- Styling the book -------------------------------------------------
 
-  function bookCss() {
+  // ---- Text size ----------------------------------------------------------
+  //
+  // A percentage on <body> only reaches text the book sizes in em or %. Many
+  // books size their paragraphs in px or pt, which ignores it, and some set
+  // their body text well under the usual 16px. So each element's own size is
+  // measured once, as the book draws it, and then set directly: 100% puts the
+  // book's main body text at NORMAL_PX, and the other text (headings, notes,
+  // drop caps) keeps its size relative to that.
+
+  var NORMAL_PX = 16;
+  var MIN_BODY_CHARS = 1500; // enough running text to trust a chapter's size
+  var bookBodyPx = 0;        // the body-text size of the book, once known
+
+  function measureSizes(doc) {
+    if (doc.__klSizes) { return doc.__klSizes; }
+    var win = doc.defaultView;
+    var els = [doc.body].concat(Array.prototype.slice.call(doc.body.querySelectorAll('*')));
+    var list = [];
+    var chars = {};
+    els.forEach(function (el) {
+      if (!(el instanceof win.HTMLElement)) { return; } // leave SVG and MathML alone
+      var px = parseFloat(win.getComputedStyle(el).fontSize);
+      if (!(px > 0)) { return; }
+      list.push({ el: el, px: px });
+      var n = 0;
+      for (var c = el.firstChild; c; c = c.nextSibling) {
+        if (c.nodeType === 3) { n += c.textContent.replace(/\s+/g, '').length; }
+      }
+      if (n) { var k = px.toFixed(2); chars[k] = (chars[k] || 0) + n; }
+    });
+    // The size with the most text at it is the body text.
+    var body = 0, most = 0;
+    Object.keys(chars).forEach(function (k) { if (chars[k] > most) { most = chars[k]; body = parseFloat(k); } });
+    doc.__klSizes = { list: list, bodyPx: body, bodyChars: most };
+    if (!bookBodyPx && most >= MIN_BODY_CHARS) { bookBodyPx = body; }
+    return doc.__klSizes;
+  }
+
+  /** Set every element's size for the chosen percentage; returns the factor used. */
+  function applySizes(doc) {
+    var m = measureSizes(doc);
+    // A chapter with plenty of running text uses its own body size; a short
+    // one (title page, copyright, a poem) goes by the rest of the book.
+    var bodyPx = m.bodyChars >= MIN_BODY_CHARS ? m.bodyPx : (bookBodyPx || m.bodyPx);
+    var factor = (settings.size / 100) * (bodyPx > 0 ? NORMAL_PX / bodyPx : 1);
+    m.list.forEach(function (item) {
+      item.el.style.setProperty('font-size', (item.px * factor).toFixed(2) + 'px', 'important');
+    });
+    return factor;
+  }
+
+  function bookCss(factor) {
     var t = THEMES[settings.theme] || THEMES.paper;
     var f = FONTS[settings.font];
     var css = 'html, body { background: ' + t.bg + ' !important; }\n' +
-      'body { color: ' + t.fg + ' !important; font-size: ' + settings.size + '% !important; }\n';
+      'body { color: ' + t.fg + ' !important; }\n';
     // Every bit of text takes the chosen colour, whatever the book asks for
     // (class colours, <font color>, text-fill colours). Links keep that colour
     // too and are marked with an underline instead, so a book that turns whole
@@ -73,10 +124,12 @@
     if (f) {
       css += 'body, body *:not(code):not(pre):not(kbd):not(samp):not(tt) { font-family: ' + f + ' !important; }\n';
     }
-    if (settings.size > 100) {
+    if (settings.size > 100 || factor > 1.05) {
       // Larger text gets more room between lines: 1.54 at 110%, 1.7 at 150%,
-      // 1.9 at 200%. At 100% and below the book keeps its own spacing.
-      var lh = Math.min(1.9, 1.5 + (settings.size - 100) * 0.004).toFixed(2);
+      // 1.9 at 200%. At 100% and below the book keeps its own spacing, unless
+      // its text was enlarged to the normal size: a line height the book set
+      // in px would then be too tight for the bigger letters.
+      var lh = Math.max(1.5, Math.min(1.9, 1.5 + (settings.size - 100) * 0.004)).toFixed(2);
       css += 'body, body * { line-height: ' + lh + ' !important; }\n' +
         'h1, h2, h3, h4, h5, h6 { line-height: 1.25 !important; }\n';
     }
@@ -88,14 +141,15 @@
 
   function styleContents(contents) {
     var doc = contents.document;
-    if (!doc || !doc.head) { return; }
+    if (!doc || !doc.head || !doc.body) { return; }
+    var factor = applySizes(doc);
     var el = doc.getElementById('kl-reader-style');
     if (!el) {
       el = doc.createElement('style');
       el.id = 'kl-reader-style';
       doc.head.appendChild(el);
     }
-    el.textContent = bookCss();
+    el.textContent = bookCss(factor);
     // A colour written on an element with !important beats any stylesheet,
     // so take those off (only on screen; the book file isn't changed).
     var strip = (THEMES[settings.theme] || THEMES.paper).strip;
